@@ -1,3 +1,10 @@
+This is a bug fix version of cuj2k. Original code (taken from following repo) has a bug when encoding 32bits per channel images. Having to say that this bug fix is not nessisary since jpeg2000 allows arbitrary numbers of channels hence you could divide your channels into multiple subchannels to bypass this bug.
+
+If you only need to work with original form (not as a shared lib), just apply the changes in tier2.c.
+
+The following text are from the original readme:
+
+--------------------------------------------------------------------
 CUJ2K 1.1 - JPEG2000 Encoder on CUDA
 http://cuj2k.sourceforge.net/
 Copyright (c) 2009 Norbert Fuerst, Martin Heide, Armin Weiss, 
