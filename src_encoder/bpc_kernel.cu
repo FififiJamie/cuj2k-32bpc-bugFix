@@ -47,9 +47,6 @@ Cleanup Pass on specified bit plane. Returns the distortion decrease
 achieved by this coding pass.
 */
 
-
-
-
 #define STRIPE_HEIGHT 4
 
 //offsets for moving around in state array;
@@ -80,7 +77,7 @@ achieved by this coding pass.
 // bit-region 1 (y is even)
 #define MASK_HAS_SIGNIF_NEIGH_R1 (1u << 15)
 #define MASK_REFINED_R1 (1u << 14)
-#define MASK_SPP_CODED_R1 (1u << 13)
+#define MASK_SPP_CODED_R1 (1u << 13) //13 before
 #define MASK_SIGNIF_R1 (1u << 12)
 
 #define MASK_SIGN_L_R1 (1u << 11)
@@ -206,7 +203,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to bottom neighbor
 						s1 |= MASK_SIGNIF_R1 | MASK_SN_U_R2 | MASK_HAS_SIGNIF_NEIGH_R2 |
 						      MASK_SIGN_U_R2 | MASK_SPP_CODED_R1;
-						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 | 
+						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2 |
 										 MASK_SIGN_R_R1;
 						states[s_i+1] |= MASK_SN_L_R1 | MASK_SN_UL_R2 |
@@ -219,7 +216,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to bottom neighbor
 						s1 |= MASK_SIGNIF_R1 | MASK_SN_U_R2 | MASK_HAS_SIGNIF_NEIGH_R2 |
 							  MASK_SPP_CODED_R1;
-						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 | 
+						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_L_R1 | MASK_SN_UL_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -256,7 +253,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to upper neighbor
 						s1 |= MASK_SIGNIF_R2 | MASK_SN_D_R1 | MASK_HAS_SIGNIF_NEIGH_R1 |
 						      MASK_SIGN_D_R1 | MASK_SPP_CODED_R2;
-						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 | 
+						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2 |
 						                 MASK_SIGN_R_R2;
 						states[s_i+1] |= MASK_SN_DL_R1 | MASK_SN_L_R2 |
@@ -269,7 +266,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to upper neighbor
 						s1 |= MASK_SIGNIF_R2 | MASK_SN_D_R1 | MASK_HAS_SIGNIF_NEIGH_R1 |
 						      MASK_SPP_CODED_R2;
-						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 | 
+						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_DL_R1 | MASK_SN_L_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -309,7 +306,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to bottom neighbor
 						s2 |= MASK_SIGNIF_R1 | MASK_SN_U_R2 | MASK_HAS_SIGNIF_NEIGH_R2 |
 						      MASK_SIGN_U_R2 | MASK_SPP_CODED_R1;
-						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 | 
+						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2 |
 						                 MASK_SIGN_R_R1;
 						states[s_i+1] |= MASK_SN_L_R1 | MASK_SN_UL_R2 |
@@ -322,7 +319,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to bottom neighbor
 						s2 |= MASK_SIGNIF_R1 | MASK_SN_U_R2 | MASK_HAS_SIGNIF_NEIGH_R2 |
 							  MASK_SPP_CODED_R1;
-						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 | 
+						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_L_R1 | MASK_SN_UL_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -359,7 +356,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to upper neighbor
 						s2 |= MASK_SIGNIF_R2 | MASK_SN_D_R1 | MASK_HAS_SIGNIF_NEIGH_R1 |
 						      MASK_SIGN_D_R1 | MASK_SPP_CODED_R2;
-						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 | 
+						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2 |
 						                 MASK_SIGN_R_R2;
 						states[s_i+1] |= MASK_SN_DL_R1 | MASK_SN_L_R2 |
@@ -372,7 +369,7 @@ __device__ float spp(sign_magn_t *v,
 						//make significant + propagate to upper neighbor
 						s2 |= MASK_SIGNIF_R2 | MASK_SN_D_R1 | MASK_HAS_SIGNIF_NEIGH_R1 |
 							  MASK_SPP_CODED_R2;
-						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 | 
+						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 |
 							             MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_DL_R1 | MASK_SN_L_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -566,7 +563,7 @@ __device__ float cup(sign_magn_t *v,
 						//make significant + propagate to bottom neighbor
 						s1 |= MASK_SIGNIF_R1 | MASK_SN_U_R2 | MASK_HAS_SIGNIF_NEIGH_R2;
 						//propagate significance to the 7 other neighbors
-						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 | 
+						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_L_R1 | MASK_SN_UL_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -605,7 +602,7 @@ __device__ float cup(sign_magn_t *v,
 						//make significant + propagate to upper neighbor
 						s1 |= MASK_SIGNIF_R2 | MASK_SN_D_R1 | MASK_HAS_SIGNIF_NEIGH_R1;
 						//propagate significance to the 7 other neighbors
-						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 | 
+						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_DL_R1 | MASK_SN_L_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -627,7 +624,7 @@ __device__ float cup(sign_magn_t *v,
 			}
 
 			if(stripe_h < 3) {
-				states[s_i + S_OFFSET_D] = s2; 
+				states[s_i + S_OFFSET_D] = s2;
 				states[s_i++] = s1;
 				continue;
 			}
@@ -646,7 +643,7 @@ __device__ float cup(sign_magn_t *v,
 						//make significant + propagate to bottom neighbor
 						s2 |= MASK_SIGNIF_R1 | MASK_SN_U_R2 | MASK_HAS_SIGNIF_NEIGH_R2;
 						//propagate significance to the 7 other neighbors
-						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 | 
+						states[s_i-1] |= MASK_SN_R_R1 | MASK_SN_UR_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_L_R1 | MASK_SN_UL_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -670,7 +667,7 @@ __device__ float cup(sign_magn_t *v,
 			states[s_i + S_OFFSET_U] = s1; //needed no more
 
 			if(stripe_h < 4) {
-				states[s_i] = s2; 	
+				states[s_i] = s2;
 				s_i += S_OFFSET_UR;
 				continue;
 			}
@@ -686,7 +683,7 @@ __device__ float cup(sign_magn_t *v,
 						//make significant + propagate to upper neighbor
 						s2 |= MASK_SIGNIF_R2 | MASK_SN_D_R1 | MASK_HAS_SIGNIF_NEIGH_R1;
 						//propagate significance to the 7 other neighbors
-						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 | 
+						states[s_i-1] |= MASK_SN_DR_R1 | MASK_SN_R_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
 						states[s_i+1] |= MASK_SN_DL_R1 | MASK_SN_L_R2 |
 										 MASK_HAS_SIGNIF_NEIGH_R1 | MASK_HAS_SIGNIF_NEIGH_R2;
@@ -705,7 +702,7 @@ __device__ float cup(sign_magn_t *v,
 					}
 				}
 			}
-			states[s_i] = s2; 
+			states[s_i] = s2;
 			s_i += S_OFFSET_UR;
 		}
 	}
@@ -722,8 +719,8 @@ __device__ float cup(sign_magn_t *v,
 // irreversible: float -> quantizazion -> int
 //RETURNS: #bitplanes
 __device__ int conv_sign_magn_lossless(sign_magn_t *v, //__global__
-									   int w, int h, 
-									   int scanw) 
+									   int w, int h,
+									   int scanw)
 {
 	int co;
 	int x,y,bitplanes;
@@ -731,7 +728,7 @@ __device__ int conv_sign_magn_lossless(sign_magn_t *v, //__global__
 	int maximum = 0;
 
 	for(y = 0; y < h; y++) {
-		for(x = 0; x < w; x++) 
+		for(x = 0; x < w; x++)
 		{
 			co = *((int*)v);
 			//printf("%d,", co);
@@ -761,9 +758,9 @@ __device__ int conv_sign_magn_lossless(sign_magn_t *v, //__global__
 
 
 __device__ int conv_sign_magn_lossy(sign_magn_t *v, //__global__
-									int w, int h, 
-									int scanw, 
-									float quantstep) 
+									int w, int h,
+									int scanw,
+									float quantstep)
 {
 	int co;
 	int x,y,bitplanes;
@@ -771,7 +768,7 @@ __device__ int conv_sign_magn_lossy(sign_magn_t *v, //__global__
 	int maximum = 0;
 
 	for(y = 0; y < h; y++) {
-		for(x = 0; x < w; x++) 
+		for(x = 0; x < w; x++)
 		{
 			co = (int)(*((float*)v) / quantstep);
 			//printf("%d,", co);
@@ -805,8 +802,8 @@ __device__ int conv_sign_magn_lossy(sign_magn_t *v, //__global__
 
 // Uses global memory => suitable for streaming
 __global__ void encode_cb_kernel_global_mem
-	(struct Raw_CB *rawcbs, 
-     struct Codeblock *cbs, 
+	(struct Raw_CB *rawcbs,
+     struct Codeblock *cbs,
      int n_cbs,
 	 float *slope_max,
 	 int bmp_width,
@@ -814,7 +811,7 @@ __global__ void encode_cb_kernel_global_mem
 	 int enable_pcrd,
 	 unsigned char *global_buf_d, unsigned char *global_buf_h, int buffer_size,
 	 unsigned *global_state_arr_d,
-	 float *global_dist_d, uint4 *global_saved_states_d) 
+	 float *global_dist_d, uint4 *global_saved_states_d)
 {
 	//int cb_i = threadIdx.x + blockIdx.x*blockDim.x;
 	//int id = threadIdx.x;
@@ -909,7 +906,7 @@ __global__ void encode_cb_kernel_global_mem
 				printf("bitplane %d: spp ", p);
 #endif
 				//printf("spp\n");
-				tot_dist -= spp(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L, 
+				tot_dist -= spp(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L,
 					rawcb->w, rawcb->h, p);
 				dist      [++codingpass] = tot_dist;
 				cb->trunc_len   [codingpass] = buf_L;
@@ -919,7 +916,7 @@ __global__ void encode_cb_kernel_global_mem
 				printf("mrp ");
 #endif
 				//printf("mrp\n");
-				tot_dist -= mrp(rawcb->v, bmp_width, states, threadIdx.x, cb->B_d, &buf_L, 
+				tot_dist -= mrp(rawcb->v, bmp_width, states, threadIdx.x, cb->B_d, &buf_L,
 					rawcb->w, rawcb->h, p);
 				dist      [++codingpass] = tot_dist;
 				cb->trunc_len   [codingpass] = buf_L;
@@ -930,7 +927,7 @@ __global__ void encode_cb_kernel_global_mem
 			printf("cup ");
 #endif
 			//printf("cup\n");
-			tot_dist -= cup(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L, 
+			tot_dist -= cup(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L,
 				rawcb->w, rawcb->h, p);
 			//printf("ok\n");
 			dist      [++codingpass] = tot_dist;
@@ -947,8 +944,8 @@ __global__ void encode_cb_kernel_global_mem
 		//MQenc_Easy_Truncation(cb->B_d, &buf_L);
 
 		//no PCRD: only truncation length after last pass needed
-		MQenc_CalcTruncation(saved_states, cb->trunc_len, cb->B_d, &buf_L, 
-			/*start index*/ (enable_pcrd ? 1 : codingpass), 
+		MQenc_CalcTruncation(saved_states, cb->trunc_len, cb->B_d, &buf_L,
+			/*start index*/ (enable_pcrd ? 1 : codingpass),
 			/*stop index*/  codingpass);
 		cb->L = buf_L;
 
@@ -958,8 +955,8 @@ __global__ void encode_cb_kernel_global_mem
 			//discard all coding passes which isn't encodable at the moment.
 			cb->trunc_len_1 = cb->trunc_len[1];
 			//calculate feasible truncation points and slope values
-			pcrd_calc_slopes(cb, dist, rawcb->subbType, 
-				rawcb->dwt_level, rawcb->color_channel, 
+			pcrd_calc_slopes(cb, dist, rawcb->subbType,
+				rawcb->dwt_level, rawcb->color_channel,
 				rawcb->subb_quantstep, slope_max, mode);
 		}
 		//subtract 1 , since we started with 0 instead of -1
@@ -972,18 +969,19 @@ __global__ void encode_cb_kernel_global_mem
 // Uses local memory for state array, dist and saved_states
 // => for GPUs where local mem is faster than global mem
 __global__ void encode_cb_kernel_local_mem
-	(struct Raw_CB *rawcbs, 
-     struct Codeblock *cbs, 
+	(struct Raw_CB *rawcbs,
+     struct Codeblock *cbs,
      int n_cbs,
 	 float *slope_max,
 	 int bmp_width,
 	 int mode,
 	 int enable_pcrd,
-	 unsigned char *global_buf_d, unsigned char *global_buf_h, int buffer_size) 
+	 unsigned char *global_buf_d, unsigned char *global_buf_h, int buffer_size)
 {
 	//int cb_i = threadIdx.x + blockIdx.x*blockDim.x;
 	//int id = threadIdx.x;
 	//int i;
+	//printf("size of Codeblock = %d \n", sizeof(Codeblock));
 	struct Codeblock *cb = &(cbs[cb_idx]);
 	struct Raw_CB *rawcb = &(rawcbs[cb_idx]);
 
@@ -1048,7 +1046,9 @@ __global__ void encode_cb_kernel_local_mem
 		cb->nCodingPasses = cb->nBitplanes*3 - 2; //bitplanes is always >= 1
 		cb->B_d = global_buf_d +  cb_idx * buffer_size;
 		cb->B_h = global_buf_h +  cb_idx * buffer_size;
-		//printf("%d bitplanes\n", cb->nBitplanes);
+
+		if(cb->nBitplanes>16)
+		printf("%d bitplanes\n", cb->nBitplanes);
 
 		//printf("states init\n");
 		//for(p = rawcb->w+2; p < ((rawcb->h+1)/2+1)*(rawcb->w+2); p++)
@@ -1057,10 +1057,15 @@ __global__ void encode_cb_kernel_local_mem
 
 		//printf("mqenc init\n");
 		/* init MQ coder */
-		MQenc_Init(threadIdx.x);
+		MQenc_Init(threadIdx.x);    //pro
 		buf_L = 0;
 
+		//char *temp =
+
 		uint4 *mqenc_reg = (uint4*)(s_data + threadIdx.x*ALIGNED_MQENC_SIZE);
+		//uint4 *mqenc_reg;
+		//put_unaligned(mqenc_reg, (uint4*)(s_data + threadIdx.x*ALIGNED_MQENC_SIZE));
+		// = (uint4*)(s_data + threadIdx.x*ALIGNED_MQENC_SIZE);
 
 		//printf("coding\n");
 		/* ************** do encoding ************** */
@@ -1074,7 +1079,7 @@ __global__ void encode_cb_kernel_local_mem
 				printf("bitplane %d: spp ", p);
 #endif
 				//printf("spp\n");
-				tot_dist -= spp(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L, 
+				tot_dist -= spp(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L,
 					rawcb->w, rawcb->h, p);
 				dist      [++codingpass] = tot_dist;
 				cb->trunc_len   [codingpass] = buf_L;
@@ -1084,7 +1089,7 @@ __global__ void encode_cb_kernel_local_mem
 				printf("mrp ");
 #endif
 				//printf("mrp\n");
-				tot_dist -= mrp(rawcb->v, bmp_width, states, threadIdx.x, cb->B_d, &buf_L, 
+				tot_dist -= mrp(rawcb->v, bmp_width, states, threadIdx.x, cb->B_d, &buf_L,
 					rawcb->w, rawcb->h, p);
 				dist      [++codingpass] = tot_dist;
 				cb->trunc_len   [codingpass] = buf_L;
@@ -1095,8 +1100,8 @@ __global__ void encode_cb_kernel_local_mem
 			printf("cup ");
 #endif
 			//printf("cup\n");
-			tot_dist -= cup(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L, 
-				rawcb->w, rawcb->h, p);
+			tot_dist -= cup(rawcb->v, bmp_width, states, threadIdx.x, k_sig, cb->B_d, &buf_L,
+				rawcb->w, rawcb->h, p);     //pro
 			//printf("ok\n");
 			dist      [++codingpass] = tot_dist;
 			cb->trunc_len   [codingpass] = buf_L;
@@ -1105,15 +1110,15 @@ __global__ void encode_cb_kernel_local_mem
 
 		//printf("terminate\n");
 		/* terminate MQ codeword correctly */
-		MQenc_Terminate(threadIdx.x, cb->B_d, &buf_L);
+		MQenc_Terminate(threadIdx.x, cb->B_d, &buf_L);    // no pro
 		//MQenc_Easy_Truncation(buf_B,buf_L);
 		//printf("trunc\n");
 
 		//MQenc_Easy_Truncation(cb->B_d, &buf_L);
 
 		//no PCRD: only truncation length after last pass needed
-		MQenc_CalcTruncation(saved_states, cb->trunc_len, cb->B_d, &buf_L, 
-			/*start index*/ (enable_pcrd ? 1 : codingpass), 
+		MQenc_CalcTruncation(saved_states, cb->trunc_len, cb->B_d, &buf_L,          //pro
+			/*start index*/ (enable_pcrd ? 1 : codingpass),
 			/*stop index*/  codingpass);
 		cb->L = buf_L;
 
@@ -1123,8 +1128,8 @@ __global__ void encode_cb_kernel_local_mem
 			//discard all coding passes which isn't encodable at the moment.
 			cb->trunc_len_1 = cb->trunc_len[1];
 			//calculate feasible truncation points and slope values
-			pcrd_calc_slopes(cb, dist, rawcb->subbType, 
-				rawcb->dwt_level, rawcb->color_channel, 
+			pcrd_calc_slopes(cb, dist, rawcb->subbType,
+				rawcb->dwt_level, rawcb->color_channel,
 				rawcb->subb_quantstep, slope_max, mode);
 		}
 		//subtract 1 , since we started with 0 instead of -1
@@ -1133,4 +1138,4 @@ __global__ void encode_cb_kernel_local_mem
 	}
 }
 
-#undef cb_idx 
+#undef cb_idx

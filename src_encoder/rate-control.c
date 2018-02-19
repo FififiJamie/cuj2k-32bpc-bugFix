@@ -21,7 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE. */
 
-/* 
+/*
 Rate-Control for JPEG2000
 
 float get_quantstep(int level,int max, SubbandTyp subband, int quant_enable)
@@ -52,10 +52,10 @@ unsigned short int* get_standard_qcd (int dwt_levels, int quant_enable) {
 	int bitplanes = 9;
     result = (unsigned short int*) malloc ((1+dwt_levels*3)* sizeof (unsigned short int));
 	counter = 1;
-	
+
 	//LL is on level5 with highest qualitiy and lowest quantization
 	result[0] = dwt_encode_stepsize((float) get_quantstep(dwt_levels,dwt_levels,LLend,quant_enable), bitplanes);
-	
+
 	//for (level=dwt_levels;level>0;level--){
 	for (level=1;level<=dwt_levels;level++){
 		//multiply by 2 or 4??
@@ -69,27 +69,27 @@ unsigned short int* get_standard_qcd (int dwt_levels, int quant_enable) {
 		result[counter] = dwt_encode_stepsize(((float) get_quantstep(level,dwt_levels,HH,quant_enable)), bitplanes);
 		counter++;
 	}
-    
+
 	return result;
 }
 
-unsigned char* get_standard_qcd_lossless (int dwt_levels) {
+unsigned char* get_standard_qcd_lossless (int dwt_levels, int bps) {
 	unsigned char* result;
 	int level, counter;
-	int bitplanes = 9;
+	int bitplanes = bps+1; //9  Change calculation
     result = (unsigned char*) malloc ((1+dwt_levels*3)* sizeof (unsigned char));
-	
+
 	//LL is on level5 with highest qualitiy and lowest quantization
 	result[0]=bitplanes<<3;
     for (counter=0;counter<(dwt_levels);counter++){
         //TODO: find right shiftsize?
         //printf("\n %x", dwt_encode_stepsize(1.0f, bitplanes));
-        
+
         result[counter*3+1] = (bitplanes+1)<<3;
 		result[counter*3+2] = (bitplanes+1)<<3;
 		result[counter*3+3] = (bitplanes+2)<<3;
-        
-        //this would equal a 1 in the 16bit interpretation, but grey result 
+
+        //this would equal a 1 in the 16bit interpretation, but grey result
         //result[counter]=0x9;
     }
 	return result;
@@ -101,21 +101,21 @@ unsigned char* get_standard_qcd_lossless (int dwt_levels) {
    decoder to perform the inverse dwt.
    quantstep: 16-bit exp.-mantissa encoded quantization step
    type: type of subband*/
-int calc_K_max(unsigned short quantstep, SubbandTyp type, int mode) {
+int calc_K_max(unsigned short quantstep, SubbandTyp type, int mode, int bps) {
 	if(mode==LOSSLESS){
 		int X_b;
 		if (type==LLend)
-			X_b = 0;
+			X_b = 0; //0
 		else if (type==LH || type==HL)
 			X_b = 1;
 		else /*HH*/
 			X_b = 2;
-			
+
 		/* return B - 1 + X_b + G (where B is the bit depth of the original
 			color transformed samples, is 8 for Y, [9 for Cr,Cb];  G=2 (guard bits)) */
-		return(10+X_b);
+		return(10+X_b+bps-8);
 	}else{
-	/* K_b_max = max{0, epsilon_b+G-1}, where G=1 and epsilon_b 
+	/* K_b_max = max{0, epsilon_b+G-1}, where G=1 and epsilon_b
 	   are bits 15..11 of quantstep */
 		return(((quantstep >> 11) & 0x1F) +1); /* need +1 because G=2 */
 	}
@@ -127,12 +127,12 @@ int calc_K_max(unsigned short quantstep, SubbandTyp type, int mode) {
  (Highest level smallest quantization)
  internal function; is called by get_quantstep() below */
 float get_quantstep_big(int level,int max, SubbandTyp subband){
-	
+
 	/*LL subband always no quantization*/
 	if (subband == LLend) {
 		return 1;
 	}
-	
+
 	switch (max-level+1) {
 		case 1:
 			switch (subband){
@@ -146,7 +146,7 @@ float get_quantstep_big(int level,int max, SubbandTyp subband){
 					return 8;
 				break;
 				default:
-					return 1;					
+					return 1;
 			}
 		break;
 
@@ -214,8 +214,8 @@ float get_quantstep_big(int level,int max, SubbandTyp subband){
 					return 1;
 			}
 		break;
-		
-		
+
+
 		case 6:
 			switch (subband){
 				case LH:
@@ -231,7 +231,7 @@ float get_quantstep_big(int level,int max, SubbandTyp subband){
 					return 1;
 			}
 		break;
-		
+
 		case 7:
 			switch (subband){
 				case LH:
@@ -247,15 +247,15 @@ float get_quantstep_big(int level,int max, SubbandTyp subband){
 					return 1;
 			}
 		break;
-		
-		
-		
+
+
+
 		default:
-		return 1;	
+		return 1;
 	}
     return 1;
 }
-	
+
 float get_quantstep(int level,int max, SubbandTyp subband, int quant_enable) {
 	if(!quant_enable)
 		return 1.0f;
@@ -267,16 +267,3 @@ float get_quantstep(int level,int max, SubbandTyp subband, int quant_enable) {
 			return step;
 	}
 }
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-

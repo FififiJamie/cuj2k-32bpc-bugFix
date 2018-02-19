@@ -70,7 +70,7 @@ int fetch_next_filename(int argc, char **argv, int *arg_i, int *file_counter,
 			char **in_format, char *out_format,
 			int *in_filename_type, int *out_filename_type,
 			int *opt_fileformat,
-			int *opt_mode, int *opt_quant_enable, 
+			int *opt_mode, int *opt_quant_enable,
 			int *opt_pcrd, int *opt_abs_size, float *opt_size_factor,
 			int *opt_cb_dim);
 
@@ -98,13 +98,15 @@ void mj2_set_options(char *opt_mj2, int *opt_fileformat, char *out_format,
 void mj2_wrapper(char *opt_mj2);
 
 //main functions with(out) streaming
-int main_stream(int argc, char **argv, int *arg_i,
-			int opt_device, int opt_bench, char *opt_bench_prefix, 
+int main_stream(const unsigned char* src, size_t insize,
+                    unsigned char** outputJ2k, size_t* outSize, int argc, char **argv, int *arg_i,
+			int opt_device, int opt_bench, char *opt_bench_prefix,
 			int opt_use_local_mem, int opt_streaming, int opt_max_cb_per_kernel,
 			char *opt_mj2);
 
-int main_nostream(int argc, char **argv, int *arg_i,
-			int opt_device, int opt_bench, char *opt_bench_prefix, 
+int main_nostream(const unsigned char* src, size_t insize,
+                    unsigned char** outputJ2k, size_t* outSize, int argc, char **argv, int *arg_i,
+			int opt_device, int opt_bench, char *opt_bench_prefix,
 			int opt_use_local_mem, int opt_streaming, int opt_max_cb_per_kernel,
 			char *opt_mj2);
 

@@ -24,8 +24,13 @@ THE SOFTWARE. */
 #ifndef waveletTransform_h
 #define waveletTransform_h
 #include "bitmap.h"
-#include <cutil.h>
-#include <cutil_inline.h>
+#include <math.h>
+//#include "driver_types.h"
+//#include <cutil.h>
+//#include <helper_cuda.h>
+#include <cuda_runtime.h>
+//#include <helper_math.h>
+//#include <cutil_inline.h>
 
 
 
@@ -43,9 +48,9 @@ typedef struct ggg{     //Type for output of wavelettransform
 		float fl_quantstep; //normal float value for quant.step
         unsigned short int quantstep; //quantizition step in 16bit floating-point-format (ready for QCD/QCC marker)
         int * daten_d; //image data(except in case of LLsubdiv-subband) on Device
-		int * daten; //image data(except in case of LLsubdiv-subband) 
+		int * daten; //image data(except in case of LLsubdiv-subband)
         struct ggg* subbands[4]; //in case of LLsubdiv-subband: pointer to the 4 sub-subbands
-        
+
 		int K_max; // number of bit planes in this subband (defined after Tier 1 if Typ!=LLsubdiv)
 		           // (when considering the coefficients in sign-magnitude form)
 
@@ -59,7 +64,7 @@ typedef struct ggg{     //Type for output of wavelettransform
         }subband;
 
 //in eingang.imgData[i] the pointer to the three Toplevel-Subbands of the channels are stored
-int DWT(struct Tile *eingang,  int  max_Level,int line_length, int mode, int quant_enable, cudaStream_t stream, int* temp_d); 
+int DWT(struct Tile *eingang,  int  max_Level,int line_length, int mode, int quant_enable, cudaStream_t stream, int bps, int* temp_d); 
 extern "C" unsigned short int dwt_encode_stepsize(float stepsize, int numbps); //Transformation in exp/mant representation
 
 #endif

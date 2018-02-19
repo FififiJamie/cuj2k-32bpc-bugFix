@@ -21,7 +21,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE. */
 
-/* 
+/*
 Windows .BMP-File reader
 only for format version 3.0 and 8bpp, 24bpp
 
@@ -47,10 +47,14 @@ Frees the device/host memory of a Bitmap/Picture.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <cutil.h>
+//#include <cutil.h>
+#include <cuda_runtime.h>
+#include <helper_cuda.h>
+#include <helper_timer.h>
 #include "bitmap.h"
 #include "waveletTransform.h"
 #include "tier1.h"
+
 
 /* size of header data in .BMP file */
 #define BMP_HEADER_SIZE 54
@@ -60,6 +64,11 @@ Frees the device/host memory of a Bitmap/Picture.
 
 
 void bmpReset(struct Bitmap *img) {
+	img->xDim = img->yDim = img->channels = img->area_alloc = 0;
+	img->imgData = NULL;
+}
+
+void tiffReset(struct simpleTIFF *img) {
 	img->xDim = img->yDim = img->channels = img->area_alloc = 0;
 	img->imgData = NULL;
 }
@@ -79,18 +88,29 @@ void bmpFree(struct Bitmap *img) {
 	int ch;
 
 	if(img->imgData != NULL) {
-		cudaFreeHost(img->imgData[0]); //ein free reicht, weil nur ein array für alle channels allokiert wurde
+		cudaFreeHost(img->imgData[0]); //ein free reicht, weil nur ein array fï¿½r alle channels allokiert wurde
 		free(img->imgData);
 	}
 	bmpReset(img);
 }
 
+/*Frees the memory of the imgData-pointer*/
+void tiffFree(struct simpleTIFF *img) {
+	int ch;
+
+	if(img->imgData != NULL) {
+		cudaFreeHost(img->imgData[0]); //ein free reicht, weil nur ein array fï¿½r alle channels allokiert wurde
+		free(img->imgData);
+	}
+	tiffReset(img);
+}
+
 //frees device mem and tile array; this function is currently used!
 void free_picture(struct Picture *pic) {
-	cutilSafeCall(cudaFree(pic->device_mem));
+	checkCudaErrors(cudaFree(pic->device_mem));
 	pic->device_mem = NULL;
 
-	free(pic->tiles);          
+	free(pic->tiles);
 	pic->tiles=NULL;
 }
 
@@ -105,7 +125,7 @@ void subb_free(subband *subb) {
 	}
 	else {
 		if(subb->Typ == LLend)
-			cutilSafeCall(cudaFree(subb->daten_d));
+			checkCudaErrors(cudaFree(subb->daten_d));
 		free(subb->K_msbs);
 		/*for(i=0; i < subb->nCodeblocks; i++)
 			cb_free(&(subb->codeblocks[i]));*/
@@ -115,8 +135,8 @@ void subb_free(subband *subb) {
 
 void tileFree_dwt(struct Tile *img) {
 	int ch;
-	subband **subb_p = (subband**) img->imgData; 
-	
+	subband **subb_p = (subband**) img->imgData;
+
 	if(img->imgData != NULL) {
 		for(ch = 0; ch < img->channels; ch++) {
 			subb_free(subb_p[ch]);
@@ -125,7 +145,7 @@ void tileFree_dwt(struct Tile *img) {
 		}
 		free(img->imgData);
 		img->imgData = NULL;
-	}	
+	}
 }
 
 void tileFree(struct Tile *img) {
@@ -134,14 +154,14 @@ void tileFree(struct Tile *img) {
 		for(ch = 0; ch < img->channels; ch++)
 			free(img->imgData[ch]);
 		free(img->imgData);
-		img->imgData = NULL;	
+		img->imgData = NULL;
 	}
 }
 
 //resizes 'in' to size (w,h), writes it to 'out'; also allocates needed memory
 void resize_bmp(struct Bitmap *out, struct Bitmap *in, int w, int h) {
 	int **out_data = (int**) malloc(3*sizeof(int*));
-	cutilSafeCall (cudaMallocHost((void**)out_data,3*w*h*sizeof(int)));
+	checkCudaErrors (cudaMallocHost((void**)out_data,3*w*h*sizeof(int)));
 	out_data[1] = &out_data[0][w*h];
 	out_data[2] = &out_data[0][2*w*h];
 	int **in_data = (int**)in->imgData;
@@ -167,48 +187,48 @@ void resize_bmp(struct Bitmap *out, struct Bitmap *in, int w, int h) {
 }
 
 
-int bmpRead(struct Bitmap *img, const char *filename) {
+int bmpRead(const unsigned char* src, size_t insize, struct Bitmap *img, const char *filename) {
 	char *header, *data;
 	/* dataOffset = position of image data in file */
 	int bytes, error, dataOffset, dataSize;
 	int w, h;
-	
+
 	/* =1 if image is stored bottom-row first, top-row last */
 	int bottomUp = 1;
-	
+
 	/* 16-bit value for bpp */
 	/* magic number at first 2 bytes of file */
 	short bpp, magic;
 
 	//type of compression; only uncompressed bitmaps allowed
-	int biCompression, biClrUsed; 
+	int biCompression, biClrUsed;
 
 	unsigned char colortable[256][4]; //order: B,G,R,empty
-	
+
 	/* if row size in bytes isn't a multiple of 4, then each row is filled
 	   with 1 to 3 zero bytes */
 	int fillBytes;
 
 	FILE *f;
-	
+
 	/* open in read binary mode */
-	f = fopen(filename, "rb");
+	f = fmemopen((void *)src, insize, "rb");
 	if(f == NULL) {
 		printf("bmpRead: file '%s' not found.\n", filename);
 		return(-1);
 	}
-	
+
 	header = (char*) malloc(BMP_HEADER_SIZE);
-	
+
 	/* size_t fread ( void * ptr, size_t size, size_t count, FILE * stream ); */
-	
+
 	bytes = (int)fread((void*)header, 1, BMP_HEADER_SIZE, f);
 	if(bytes != BMP_HEADER_SIZE) {
 		fclose(f); free(header);
 		printf("bmpRead: read error in '%s'.\n", filename);
 		return(-1);
 	}
-		
+
 	magic = *((short*) header);
 	bpp = *((short*) (header+28));
 	biCompression = *((int*)(header+30));
@@ -219,15 +239,15 @@ int bmpRead(struct Bitmap *img, const char *filename) {
 	if(h < 0) {
 		/* this means that the top-row is stored first */
 		h = -h;
-		bottomUp = 0;		
+		bottomUp = 0;
 	}
-	
+
 	free(header); header=NULL;
-	
+
 	//printf("magic: %d\n", magic);
 	//printf("header: 0:%d 1:%d\n", header[0], header[1]);
 	//printf("Windows bitmap, w:%d h:%d bpp:%d data-offset:%d\n", w, h, bpp, dataOffset);
-	
+
 	if(magic != BMP_MAGIC) {
 		fclose(f);
 		printf("bmpRead: '%s' is not a bitmap-file.\n", filename);
@@ -243,6 +263,8 @@ int bmpRead(struct Bitmap *img, const char *filename) {
 		printf("bmpRead: only uncompressed BMPs allowed (file '%s').\n", filename);
 		return(-1);
 	}
+
+	printf("biClrUsed= %d\n", biClrUsed);
 
 	if(bpp == 8) {
 		//read color table
@@ -262,27 +284,30 @@ int bmpRead(struct Bitmap *img, const char *filename) {
 		}
 	}
 
-	if(bpp == 24) {
+	if(bpp == 24) {  //padding bmp special
 		/* 3*w = number of bytes per row */
 		fillBytes = 4 - ((3*w) % 4);
 		/* 4 fillBytes are of course 0 fillbytes => modulo 4 */
-		fillBytes %= 4; 
+		fillBytes %= 4;
 		/* calculate size of image date in .BMP-file, inclusive fill-bytes */
 		dataSize = (3*w + fillBytes) * h;
 	}
 	else { // 8 bpp
-		fillBytes = 4 - (w % 4);	
+		fillBytes = 4 - (w % 4);
 		/* 4 fillBytes are of course 0 fillbytes => modulo 4 */
-		fillBytes %= 4; 
+		fillBytes %= 4;
 		/* calculate size of image date in .BMP-file, inclusive fill-bytes */
 		dataSize = (w + fillBytes) * h;
 	}
 	data =(char*) malloc(dataSize);
 
+	printf("w= %d, fillBytes= %d, dataOffset = %d, dataSize= %d\n", w, fillBytes, dataOffset, dataSize);
+
+
 
 	//printf("Starting to read image data from file\n");
-	
-	/* int fseek ( FILE * stream, long int offset, int origin ); 
+
+	/* int fseek ( FILE * stream, long int offset, int origin );
 	   SEEK_SET = from beginning of file */
 	error = fseek(f, dataOffset, SEEK_SET);
 	bytes = (int)fread((void*)data, 1, dataSize, f);
@@ -292,29 +317,29 @@ int bmpRead(struct Bitmap *img, const char *filename) {
 		printf("bmpRead: read error in file '%s'.\n", filename);
 		return(-1);
 	}
-	
+
 	//printf("Starting to store image data in array\n");
-	
+
 	{
 		int ch, row, col;
 		int **intData;
 		unsigned char *data_i = (unsigned char*) data;
-	
+
 		//only one array for the 3 channels (to make memcpy easier)
 		if(img->imgData == NULL) {
 			//printf("bmpRead: completely new mem\n");
 			intData = (int**) malloc(3*sizeof(int*));
-			cutilSafeCall(cudaMallocHost((void**)intData,3*w*h*sizeof(int)));
+			checkCudaErrors(cudaMallocHost((void**)intData,3*w*h*sizeof(int)));
 			img->area_alloc = w*h;
-		}	
+		}
 		else {
 			//printf("bmpRead: reuse\n");
 			intData = (int**) (img->imgData);
 			if(w*h > img->area_alloc) {
 				//printf("bmpRead: reuse must free\n");
-				cutilSafeCall(cudaFreeHost(intData[0]));
+				checkCudaErrors(cudaFreeHost(intData[0]));
 				//printf("bmpRead: reuse must malloc\n");
-				cutilSafeCall(cudaMallocHost((void**)intData,3*w*h*sizeof(int)));
+				checkCudaErrors(cudaMallocHost((void**)intData,3*w*h*sizeof(int)));
 				img->area_alloc = w*h;
 			}
 		}
@@ -326,7 +351,7 @@ int bmpRead(struct Bitmap *img, const char *filename) {
 			row = h-1;
 		else
 			row = 0;
-		
+
 		if(bpp == 24) {
 			while(row>=0 && row<h) {
 				for(col = 0; col < w; col++) {
@@ -336,7 +361,7 @@ int bmpRead(struct Bitmap *img, const char *filename) {
 				}
 				/* at the end of the row: skip fillbytes */
 				data_i += fillBytes;
-				
+
 				if(bottomUp) row--;
 				else         row++;
 			}
@@ -354,25 +379,349 @@ int bmpRead(struct Bitmap *img, const char *filename) {
 				}
 				/* at the end of the row: skip fillbytes */
 				data_i += fillBytes;
-				
+
 				if(bottomUp) row--;
 				else         row++;
 			}
 		}
-		
+
 		img->imgData = (void**)intData;
 	}
-	
-	//printf("stored in array. Freeing memory...\n");	
-	
+
+	//printf("stored in array. Freeing memory...\n");
+
 	free(data); data=NULL;
 	img->xDim = w;
 	img->yDim = h;
 	img->channels = 3;
 	//printf("Bitmap reading complete.\n");
-	
+
 	return 0;
 }
+
+
+static int readTiffData(char *readdata, int dataOffSets, int channels, int size, unsigned char *src){
+  //only deal with single strip now
+  //char *data;
+  //readdata = (char*)malloc(size);
+  //printf("img->area_alloc %d\n", img->area_alloc);
+  //if(channels==1){
+		//printf("size = %d, dataOffSets = %X\n", size, dataOffSets);
+
+		memcpy((void*)readdata, src+dataOffSets, size);
+
+
+    //readdata = data;
+  //}
+  //else{
+    //printf("Sorry, only deal with greyscale now\n");
+    //return 1;
+  //}
+	//printf("ads\n");
+  //free (data);
+
+  return 0;
+
+}
+
+//read tiff
+int tiffRead(const unsigned char* src0, size_t insize, struct simpleTIFF *img, const char *filename){
+	//get the image data
+	char *data;
+	int tagsNum= 0;
+	char *header;
+	char *tags;
+	char *src;
+	int totalTagSize= 0;
+	char *temp;
+
+	//simpleTIFF img;
+	char *tempPOS;
+	short tagField;
+	short dataType;
+	int dataCount;
+	int tagValue; //read the last 8 bits, manipulate later
+	int dataOffSets;
+	int sampleFmt = 2; //assume signed int
+	//printf("INSIZE from nappa: \n", );
+
+	src = (char*)malloc(insize);
+	memcpy(src, src0, insize);
+
+
+	header = (char*)malloc(8);
+	memcpy((void*)header,(void*)src,8);
+	//printf("reaadsize = %d\n", readsize);
+	short ID = *((short*)header+1);
+
+	//printf("ID is: %d \n", ID); // change to if
+	if(ID!=42){
+		header=header+1;
+		short ID = *((short*)header+1);
+		if(ID!=42){printf("error: not a valid TIFF file\n"); return 1;}
+	}
+
+	int IFDOffsets = *((int*)header+1);
+
+	//printf("IFD offsets is: %d \n", IFDOffsets);
+
+	//fseek(tiff, IFDOffsets, SEEK_SET);
+	temp = (char*)malloc(2);
+	memcpy((void*)temp,src+IFDOffsets,2); //tiff is at the first tag after fread
+	tagsNum = *((short*)temp);
+	//printf("tagsNum is: %d \n", tagsNum);
+
+
+	totalTagSize = tagsNum * BYTE_PER_TAG;
+	//printf("tiff is at %X\n", (int)ftell(tiff));
+
+	//printf("totalTagSize = %d\n", totalTagSize);
+	tags = (char*)malloc(totalTagSize);
+
+	memcpy((void*)tags, src+IFDOffsets+2, totalTagSize); //read all the tags
+	//processing tags
+
+
+	for(int i = 0; i<tagsNum; i++){
+		tempPOS = tags + BYTE_PER_TAG*i;
+		tagField = *((short*)tempPOS);
+		dataType = *((short*)tempPOS+1);
+		tempPOS = tempPOS+4;
+		dataCount = *(int*)tempPOS;
+		tempPOS = tempPOS+4;
+		tagValue = *(int*)tempPOS;
+
+		//printf("tagField = %d, dataType = %d, dataCount = %d, tagValue = %d\n", tagField, dataType, dataCount, tagValue);
+		if(tagField == TAG_WIDTH)img->xDim=tagValue;
+
+		if(tagField == TAG_HEIGHT)img->yDim=tagValue;
+
+		if(tagField == TAG_BITS_PER_SAMPLE){
+			if(dataCount==3) //value field is offset
+				tempPOS = src+tagValue;
+			img->bps=(int)(*(short*)tempPOS);
+			//printf("tag bps = %d\n",img->bps );
+			if(img->bps!=8 && img->bps!=16 && img->bps!=24 && img->bps!=32){printf("Sorry, only support 8, 16 or 32 bits per channel\n");return 1;}
+		}
+
+		if(tagField == TAG_COLOR_SPACE){  //RGB to be implemented
+			img->clrSpace = (short)tagValue;
+
+			if(img->clrSpace==2){
+				printf("[WARNING] multi-components, only work with Interleaved order(RGBRGB)..., not Per Channel(RRGGBB)...\n");\
+				img->channels = 3;
+			}
+			else if(img->clrSpace==1)
+				img->channels = 1;
+			else{
+				printf("Sorry, unsupported format\n");
+				return 1;
+			}
+		}
+
+		if(tagField == TAG_STRIP_OFFSETS){
+			if(dataCount!=1){
+				printf("Sorry, simpleTIFF only supports single strip for now\n");
+				return 1;
+			}
+			else
+				dataOffSets = tagValue;
+		}
+
+		if(tagField == TAG_SAMPLE_FORMAT){
+			tagValue = (short)tagValue;
+			if(tagValue==3){
+				printf("[ERROR] Floating point value is currently not supported\n");
+				sampleFmt = tagValue;
+				return 1;
+			}
+			else if(tagValue==1 || tagValue==2)
+			sampleFmt = tagValue; //int or uint
+			else{
+				printf("Sorry, unsupported data format\n");
+				return 1;
+			}
+			//printf("sample format = %d\n", sampleFmt);
+		}
+
+		if(tagField == TAG_COMPRESSION){
+			if(tagValue!=1){
+				printf("Sorry, only deal with raw data now (COMPR code= %d)\n", tagValue);
+				return 1;
+			}
+		}
+	}
+
+	//img->xDim = 4000;
+	//img->yDim = 4000;
+
+	img->area_alloc = img->xDim * img->yDim * (img->bps/8) * img->channels; //size in bytes
+
+	printf("width = %d, height = %d, imgSize = %d, bits/sample = %d \n",img->xDim, img->yDim,
+						img->area_alloc, img->bps);
+
+	data=(char*)malloc(img->area_alloc);
+	int error = readTiffData(data, dataOffSets, img->channels, img->area_alloc, (unsigned char*)src);
+	if(error){
+		printf("Tiff read error!\n");
+		return 1;
+	}
+
+
+	//printf("Starting to store image data in array\n");
+	{
+		int ch, row, col;
+		int **intData;
+		unsigned char *data_i = (unsigned char*) data;
+		int w = img->xDim;
+		int h = img->yDim;
+
+		//test
+		//FILE *out = fopen("out.yuv", "wb");
+		//fwrite((void*)data_i, 1, img->area_alloc, out);
+		//fclose(out);
+
+
+		//only one array for the 3 channels (to make memcpy easier)
+		if(1/*img->imgData == NULL*/) {
+			//printf("bmpRead: completely new mem\n");
+			intData = (int**) malloc(3*sizeof(int*));
+			checkCudaErrors(cudaMallocHost((void**)intData,3*w*h*sizeof(int)));
+		}
+		else { //for streaming, not needed now
+			printf("bmpRead: reuse\n");
+			//intData = (int**) (img->imgData);
+			//if(w*h > img->area_alloc) {
+				//printf("bmpRead: reuse must free\n");
+				//checkCudaErrors(cudaFreeHost(intData[0]));
+				//printf("bmpRead: reuse must malloc\n");
+				//checkCudaErrors(cudaMallocHost((void**)intData,3*w*h*sizeof(int)));
+				//img->area_alloc = w*h;
+			//}
+		}
+		intData[1] = &intData[0][w*h];
+		intData[2] = &intData[0][2*w*h];
+		/*intData = (int**) malloc(3*sizeof(int*));
+		cudaMallocHost((void**)intData,3*w*h*sizeof(int));*/
+
+		row =0;
+
+		if(img->channels == 3) { //change later for RGB
+			int len = img->bps/8;
+			unsigned int temp1;
+			//int flag = 0;
+			int max = (int)pow(2.0,(float)(img->bps)) -1;
+
+			printf("Reading RGB data\n");
+
+
+			while(row>=0 && row<h) {
+				for(col = 0; col < w; col++) {
+					/* image is stored in BGR order */
+					for(ch = 0; ch <= 2; ch++){
+						//intData[ch][col + row*w] = (int)(*(data_i++));
+						if(len==3){
+							temp1 = (unsigned int)(*((unsigned char*)(data_i+2)));
+							temp1 = temp1<< 16 + (unsigned int)(*((unsigned short*)data_i));
+						}
+						else if(len==2)
+							temp1 = (unsigned int)(*((unsigned short*)data_i));
+						else if(len==1)
+							temp1 = (unsigned int)(*((unsigned char*)data_i));
+
+						intData[ch][col + row*w] = temp1;
+						data_i=data_i+len;
+
+					}
+
+
+				}
+				/* at the end of the row: skip fillbytes */
+				//data_i += fillBytes;
+
+				//if(bottomUp) row--;
+				//else
+				 row++;
+			}
+		}
+		else { //8 bpp //grey scale
+			//img->bps = 16;
+			int len = img->bps/8;
+			unsigned int temp1;
+			//int flag = 0;
+			int max = (int)pow(2.0,(float)(img->bps)) -1;
+			//int modulo = max/32766;
+			printf("Reading greyscale data\n");
+			//FILE *mp2 = fopen("load.yuv","wb");
+			//srand (time(NULL));
+			while(row>=0 && row<h) {
+				for(col = 0; col < w; col++) {
+					// grey image: use same value for each B,G,R
+
+					//temp1 = rand()%32766;
+					//temp1 = temp1 * (rand()%(modulo+1));
+
+					if(len==3){
+						temp1 = (unsigned int)(*((unsigned char*)(data_i+2)));
+						temp1 = temp1<< 16 + (unsigned int)(*((unsigned short*)data_i));
+					}
+					else if(len==2)
+					temp1 = (unsigned int)(*((unsigned short*)data_i));
+					else if(len==1)
+					temp1 = (unsigned int)(*((unsigned char*)data_i));
+
+					//temp1 = col*6;
+
+					for(ch = 2; ch >= 0; ch--){
+						/*if((col+row)%100<50){}
+						else if((col+row)%300<100)
+							temp1 = max;
+							else if((col+row)%300<200)
+							temp1 = max/2;
+							else
+							temp1 = 0;
+							*/
+
+						//if(row==232&&col>455&&col<555){
+						//	printf("temp1 = %X, temp1&& = %X\n", temp1, temp1 & 0xFFFF);
+						//}
+						//temp1 = temp1 & 0xFF;
+						intData[ch][col + row*w] = temp1;
+						//fwrite(&(intData[ch][col + row*w]), 1, 2, mp2);
+					}
+						//intData[ch][col + row*w] = (int)(colortable[(*data_i)][ch]);
+						//temp1 = (short)intData[1][col + row*w];
+						//if(row==0)printf("temp1=%d\n",temp1);
+
+						data_i=data_i+len;
+				}
+				/* at the end of the row: skip fillbytes */
+				//data_i += fillBytes;
+				//if(bottomUp) row--;
+				//else
+				row++;
+			}
+			//fclose(mp2);
+		}
+		img->xDim = w;
+		img->yDim = h;
+		img->imgData = (void**)intData;
+	}
+
+	//printf("stored in array. Freeing memory...\n");
+
+	free(data);
+	data=NULL;
+
+	img->channels = 3;
+	printf("Tiff reading complete.\n");
+	return 0;
+}
+
+
+
+
+
 
 
 // :( BMP uses different byte order compared to JPEG2000
@@ -465,9 +814,10 @@ static int is_bmp(const char *filename) {
 	return 1;
 }
 
-int any_img_read(struct Bitmap *bm, const char *filename) {
+int any_img_read(const unsigned char* src, size_t insize, struct Bitmap *bm, const char *filename) {
+	//printf("DEBUG: test\n");
 	if(is_bmp(filename))
-		return bmpRead(bm, filename);
+		return bmpRead(src, insize, bm, filename);
 	else {
 		int ret;
 		char cmdline[2000 + L_tmpnam];
@@ -478,7 +828,7 @@ int any_img_read(struct Bitmap *bm, const char *filename) {
 		//VC++'s tmpnam() does not use proper TEMP folder, so use _tempnam instead
 		char *temp_file;
 		temp_file = _tempnam(NULL, "convert"); //returns filename in TEMP folder
-#endif		
+#endif
 		//printf("temp file is: '%s'\n", temp_file);
 
 		//Create Windows bitmap 3.0 with 24bpp
@@ -493,9 +843,9 @@ int any_img_read(struct Bitmap *bm, const char *filename) {
 			free(temp_file);
 			return ret;
 		}
-		ret = bmpRead(bm, temp_file);
+		ret = bmpRead(src, insize, bm, temp_file);
 		remove(temp_file); //clean up temp file
-#ifndef UNIX		
+#ifndef UNIX
 		free(temp_file); // _tempnam allocates memory for filename
 #endif
 		return ret;

@@ -23,7 +23,7 @@ THE SOFTWARE. */
 
 /* Picture Preprocessing, has to be done before DWT.
  * Order:
- * Tiling 
+ * Tiling
  * Dc-Shift/MCT (RCT:int,ICT:float)
  */
 
@@ -46,13 +46,15 @@ THE SOFTWARE. */
   .......
   Can be accessed by pic->tile[number]
 */
-extern "C"
+extern "C"{
 void tiling (struct Picture *pic, struct Bitmap *img, int cb_dim);
+void tiling2 (struct Picture *pic, struct simpleTIFF *img, int cb_dim);
+}
 
 
 /*Dc-Shift and Multi Color Transform in one.
   Has to be executed AFTER Tiling!
-  
+
   DC-Shift: centers all the values around zero with
   shiftsize 128
 
@@ -63,6 +65,6 @@ void tiling (struct Picture *pic, struct Bitmap *img, int cb_dim);
   LOSSY for Irreversible color transformation (Used with 9/7 irreversible wavelet transform=lossy)
   results in float numbers */
 extern "C"
-void dcshift_mct (struct Picture *pic, int mode, cudaStream_t stream);
+void dcshift_mct (struct Picture *pic, int mode, int bps, cudaStream_t stream);
 
 #endif

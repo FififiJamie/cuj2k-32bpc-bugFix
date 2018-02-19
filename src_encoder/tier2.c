@@ -24,7 +24,7 @@ THE SOFTWARE. */
 /* Tier2.c
  *
  * Contains all the functions needed to encode all nessecary header information to a buffer.
- * 
+ *
  */
 
 #define MAX_LEVEL 4
@@ -135,8 +135,8 @@ struct Packet *getPacket(struct Picture *pic, int res, int comp, int tile){
 		temp->reslevel = res;
 		temp->zeroBitPlane[0] = sband->K_msbs;
 		temp->nCodeBlocks[0] = sband->nCodeblocks;
-		
-		
+
+
 
 		temp->cb = (struct Codeblock**) malloc(sizeof(struct Codeblock *));
 		temp->cb[0] = sband->codeblocks;
@@ -149,7 +149,7 @@ struct Packet *getPacket(struct Picture *pic, int res, int comp, int tile){
 		int i;
 		// everything is needed 3 times. one time for each subband
 		temp->inclusion = (int**) malloc(sizeof(int *)*3);
-		temp->zeroBitPlane = (int**) malloc(sizeof(int *)*3);
+		temp->zeroBitPlane = (int**) malloc(sizeof(int *)*3);  //3
 		temp->nCodeBlocks = (int*) malloc(sizeof(int)*3);
 		temp->cb = (struct Codeblock**) malloc(sizeof(struct Codeblock *)*3);
 		temp->CBx = (int*) malloc(sizeof(int *)*3);
@@ -174,28 +174,31 @@ int encodeTile(struct Buffer *buffer, struct Picture *pic, struct Tier1_Pic *t1p
 	/* Contains:
 	 * Tile Header
 	 * Packet Stream */
+	 //printf("DEBUG: encodeTile\n");
 	int res, ch, length;
 	int lengthField = encodeTileHeader(buffer , pic, tile);
+	int packetSeq = 0;
 	struct Packet *packet;
 	// Start of Data marker
 	BufferShort(buffer, SOD);
 
     /* 2 of the 5 nested loops which define the progression order.
-	   the 3rd loop is over the tiles in the main program, since single layer
+	   the 3rd loop is over the tiles in the main program, since single
 	   and no precincts the other 2 are not needed.*/
 	for(res = 0;res < dwt + 1;res++){
 		for(ch = 0;ch < 3;ch++){
 			packet = getPacket(pic, res, ch, tile);
-			encodePacketHeader(buffer, packet, res);
+			encodePacketHeader(buffer, packet, res, packetSeq);
 			contributeCodeBlocks(buffer, packet, res, t1pic);
 			freePacket(packet);
 			free(packet);
 			packet = NULL;
+			packetSeq++;
 		}
 	}
 
 	// update length field, length + 6 because the whole tile counts excluding nothing
-    length = buffer->ByteCounter - lengthField + 6; 
+    length = buffer->ByteCounter - lengthField + 6;
 	buffer->Data[lengthField] = (unsigned char)(length>>24);
 	buffer->Data[lengthField + 1] = (unsigned char)(length>>16);
 	buffer->Data[lengthField + 2] = (unsigned char)(length>>8);
@@ -223,7 +226,7 @@ int encodeTileHeader(struct Buffer *buffer, struct Picture *pic, int tile){
 	BufferShort(buffer, 10);
 	BufferShort(buffer, tile);
 	lengthField = buffer->ByteCounter;
-    
+
 	// is updated by another function when the tile stream is written(writes tilestream length)
 	BufferInt(buffer, 0);
 	// tile part number and total number of tile parts. since there is only one tile part set to 0 and 1
@@ -280,7 +283,9 @@ int codenCodingpasses(int n, struct Buffer *buffer){
 	}
 	if(n > 36){
 		int i, temp;
-		for(i = 0;i< 8;i++){
+		//if(n>108)
+		//printf("[WARNING] n = %d\n", n);
+		for(i = 0;i< 9;i++){ //8
 			BufferOne(buffer);
 		}
 		temp = n - 37;
@@ -313,7 +318,9 @@ int encodeCodeBytes(int nCodingpasses, int bytes, struct Buffer *buffer){
 	length = calcBinaryLength(bytes);
 	temp = length - (int)floor(log((double)nCodingpasses)/log((double)2));
 	temp -= 3;
+	//printf("codeBytes\n");
 	if(temp > 0){
+		//printf("[Warning] ADD LBlock\n");
 		for(i = 0;i < temp;i++){
 			BufferOne(buffer);
 		}
@@ -339,7 +346,7 @@ int encodeCodeBytes(int nCodingpasses, int bytes, struct Buffer *buffer){
 
 
 /* encodes the main header. reads all required parameters out of *pic */
-int encodeMainHeader(struct Buffer *buffer, struct Picture *pic,int dwt, int mode, int quant_enable){
+int encodeMainHeader(struct Buffer *buffer, struct Picture *pic,int dwt, int mode, int quant_enable, int bps){
 	/* Contains:
 	 * SOC Marker
 	 * SIZ Marker
@@ -348,7 +355,8 @@ int encodeMainHeader(struct Buffer *buffer, struct Picture *pic,int dwt, int mod
 	int lengthField, length, i;
 	unsigned short int *standard_qcd;
     unsigned char *standard_qcd_lossless;
-	
+
+
 
 	// Start of Codestream Marker
 	BufferShort(buffer, SOC);
@@ -378,17 +386,17 @@ int encodeMainHeader(struct Buffer *buffer, struct Picture *pic,int dwt, int mod
 	// only rgb mode yet
 	BufferShort(buffer, 0x0003);
 	// sample range -126 .. 127 <=> 24bit?
-	BufferByte(buffer, 0x07);
+	BufferByte(buffer, (unsigned char)(bps-1));
 	// subsampleling factor for each component(forced to 1)
 	BufferByte(buffer, 0x01);
 	BufferByte(buffer, 0x01);
 	// same for each component
-	BufferByte(buffer, 0x07);
+	BufferByte(buffer, (unsigned char)(bps-1));
 	// subsampleling factor for each component(forced to 1)
 	BufferByte(buffer, 0x01);
 	BufferByte(buffer, 0x01);
 
-	BufferByte(buffer, 0x07);
+	BufferByte(buffer, (unsigned char)(bps-1));
 	// subsampleling factor for each component(forced to 1)
 	BufferByte(buffer, 0x01);
 	BufferByte(buffer, 0x01);
@@ -401,14 +409,16 @@ int encodeMainHeader(struct Buffer *buffer, struct Picture *pic,int dwt, int mod
 	 * Marker Consists of:
 	 * QCD|Length Field|Quantisation Parameters */
 	BufferShort(buffer, QCD);
+	//printf("write QCD\n");
 	lengthField = buffer->ByteCounter;
 	// length field is updated later
 	BufferShort(buffer, 0x0000);
 	BufferByte(buffer, pic->tiles[0].QS);
-	
-    if (mode == LOSSLESS){
-	    standard_qcd_lossless = get_standard_qcd_lossless(4);
-        for(i = 0;i < 13;i++){
+
+    if (mode == LOSSLESS){//test
+			//printf("god!!!!!!!!!\n");
+	    standard_qcd_lossless = get_standard_qcd_lossless(4, bps);
+        for(i = 0;i < 13;i++){ //13 before
 	        BufferByte(buffer, standard_qcd_lossless[i]);
 	    }
         free(standard_qcd_lossless);
@@ -436,15 +446,15 @@ int encodeMainHeader(struct Buffer *buffer, struct Picture *pic,int dwt, int mod
 	BufferShort(buffer, 0x0000);
 
 	// CS field
-	/* CS(0) = precinct size defined?, CS(1) = SOP used?, CS(2) = EPH used?, CS(3 .. 4) = Anchor point, 
+	/* CS(0) = precinct size defined?, CS(1) = SOP used?, CS(2) = EPH used?, CS(3 .. 4) = Anchor point,
 	 * CS(5 .. 7) = 0 */
 	BufferZero(buffer);
 	BufferZero(buffer);
 	BufferZero(buffer);
 	BufferZero(buffer);
 	BufferZero(buffer);
-	BufferOne(buffer);
-	BufferZero(buffer);
+	BufferOne(buffer);  //EPH shall be used
+	BufferOne(buffer); //BufferZero(buffer);
 	BufferZero(buffer);
 	// Op field = 0 since only LRCP progression is implemented yet
 	BufferByte(buffer, 0x00);
@@ -473,23 +483,33 @@ int encodeMainHeader(struct Buffer *buffer, struct Picture *pic,int dwt, int mod
 	buffer->Data[lengthField] = (unsigned char)(length >> 8);
 	buffer->Data[lengthField + 1] = (unsigned char)(length);
 
-	
+
 	//insert optional markers here ^^
 	return 0;
 }
 
 /* Writes the header for the given packet to the buffer*/
-int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res){
+int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res, int packetSeq){
 	/* Contains:
 	 * Inclusion Tag Tree
 	 * Zero Bit Plane Tag Tree
 	 * Number of Coding Passes
 	 * Length Information */
+	 //printf("DEBUG: PAcket header!!!\n");
+
+	 //SOP for debuging
+	BufferShort(buffer, SOP);
+	BufferShort(buffer, 0x4);
+	BufferShort(buffer, packetSeq);
+
+
 	int i, length;
 	struct TagTree *inclusion, *zeroBitplane;
 	length = buffer->ByteCounter;
-	BufferOne(buffer);
-	if(packet->reslevel == 0){ 
+	BufferOne(buffer);  // not empty
+
+	if(packet->reslevel == 0){
+		//printf("packet if\n");
 		inclusion = makeTree(packet->inclusion[0], packet->CBx[0], packet->CBy[0]);
 		zeroBitplane = makeTree(packet->zeroBitPlane[0], packet->CBx[0], packet->CBy[0]);
 		for(i = 0;i<packet->nCodeBlocks[0];i++){
@@ -500,7 +520,7 @@ int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res){
 				encodeCodeBytes(packet->cb[0][i].nCodingPasses, packet->cb[0][i].L, buffer);
 			}
 		}
-		
+
 		freeTree(zeroBitplane);
 		free(zeroBitplane);
 		zeroBitplane = NULL;
@@ -509,6 +529,7 @@ int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res){
 		inclusion = NULL;
 	}
 	else{
+		//printf("packet else\n");
 		int sband;
 		for(sband = 0;sband<3;sband++){
 			inclusion = makeTree(packet->inclusion[sband], packet->CBx[sband], packet->CBy[sband]);
@@ -516,11 +537,12 @@ int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res){
 			for(i = 0;i<packet->nCodeBlocks[sband];i++){
 				codeNode(inclusion, i % packet->CBx[sband], i / packet ->CBx[sband], buffer);
 				if(packet->cb[sband][i].nCodingPasses != 0){
+					//printf("packet else inner if call, i= %d\n", i);
 					codeNode(zeroBitplane, i % packet->CBx[sband], i / packet ->CBx[sband], buffer);
 					codenCodingpasses(packet->cb[sband][i].nCodingPasses, buffer);
 					encodeCodeBytes(packet->cb[sband][i].nCodingPasses, packet->cb[sband][i].L, buffer);
 				}
-				
+
 			}
 			freeTree(zeroBitplane);
 			free(zeroBitplane);
@@ -534,7 +556,7 @@ int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res){
 
 
 	StuffTempZero(buffer);
-	
+
 	BufferShort(buffer, EPH);
 	return 0;
 
@@ -587,17 +609,13 @@ int contributeCodeBlocks(struct Buffer *buffer, struct Packet *packet, int res, 
 
 
 /*encodes entire Code Stream out of Tier 1 compressed Picture struct */
-int encodeCodeStream(struct Buffer *buffer, struct Picture *pic, struct Tier1_Pic *t1pic, int dwt, int mode, int quant_enable){
+int encodeCodeStream(struct Buffer *buffer, struct Picture *pic, struct Tier1_Pic *t1pic, int dwt, int mode, int quant_enable, int bps){
 	int i;
-	encodeMainHeader(buffer, pic, dwt, mode, quant_enable);
+	encodeMainHeader(buffer, pic, dwt, mode, quant_enable, bps);
 	for(i = 0;i < pic->tile_number;i++){
+		//printf("DEBUG: how many tile?\n");
 		encodeTile(buffer, pic, t1pic, i, dwt);
 	}
 	BufferShort(buffer, EOC);
 	return 0;
 }
-
-
-
-
-

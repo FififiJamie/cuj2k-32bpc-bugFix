@@ -49,12 +49,12 @@ extern "C" struct Packet *getPacket(struct Picture *pic, int res, int comp, int 
 /* Writes the indexed Tile Header to the given buffer */
 extern "C" int encodeTileHeader(struct Buffer *buffer, struct Picture *pic, int tile);
 /* Writes the header for the given packet to the buffer*/
-extern "C" int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res);
+extern "C" int encodePacketHeader(struct Buffer *buffer, struct Packet *packet, int res, int packetSeq);
 /* Contributes the Code Blocks in the given packet to the buffer */
 extern "C" int contributeCodeBlocks(struct Buffer *buffer, struct Packet *packet, int res, struct Tier1_Pic *t1pic);
 
 /*encodes entire Code Stream out of Tier 1 compressed Picture struct */
-extern "C" int encodeCodeStream(struct Buffer *buffer, struct Picture *pic, struct Tier1_Pic *t1pic, int dwt, int mode, int quant_enable);
+extern "C" int encodeCodeStream(struct Buffer *buffer, struct Picture *pic, struct Tier1_Pic *t1pic, int dwt, int mode, int quant_enable, int bps);
 
 
 

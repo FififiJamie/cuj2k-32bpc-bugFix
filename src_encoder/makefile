@@ -26,7 +26,7 @@ CCFILES		:= BufferedWriter.c encoder_main.c file_access.c rate-control.c \
 
 # NO_DEVICE_PROP means that cudaGetDeviceProperties() is not implemented,
 # like in the linux version of CUDA 2.1.
-# when defined, the default GPU is used instead of selecting a device 
+# when defined, the default GPU is used instead of selecting a device
 # with compute-capability 1.1.
 # When the user sets the GPU device with -setdev, no checking is performed.
 # You can try to uncomment the line below if you get runtime errors like
@@ -40,7 +40,7 @@ CCFILES		:= BufferedWriter.c encoder_main.c file_access.c rate-control.c \
 .SUFFIXES : .cu .cu_dbg.o .c_dbg.o .cpp_dbg.o .cu_rel.o .c_rel.o .cpp_rel.o .cubin
 
 # Add new SM Versions here as devices with new Compute Capability are released
-SM_VERSIONS := sm_10 sm_11 sm_12 sm_13
+SM_VERSIONS := sm_21 sm_35 sm_50 sm_32 sm_30
 
 CUDA_INSTALL_PATH ?= /usr/local/cuda
 
@@ -56,7 +56,7 @@ DARWIN = $(strip $(findstring DARWIN, $(OSUPPER)))
 
 # Basic directory setup for SDK
 # (override directories only if they are not already defined)
-SRCDIR     ?= 
+SRCDIR     ?=
 ROOTDIR    ?= ..
 ROOTBINDIR ?= $(ROOTDIR)/../bin
 BINDIR     ?= $(ROOTBINDIR)/$(OSLOWER)
@@ -65,7 +65,7 @@ LIBDIR     := $(HOME)/NVIDIA_GPU_Computing_SDK/C/lib
 COMMONDIR  := $(HOME)/NVIDIA_GPU_Computing_SDK/C/common
 
 # Compilers
-NVCC       := $(CUDA_INSTALL_PATH)/bin/nvcc 
+NVCC       := $(CUDA_INSTALL_PATH)/bin/nvcc
 CXX        := g++
 CC         := gcc
 LINK       := g++ -fPIC
@@ -100,7 +100,7 @@ CWARN_FLAGS := $(CXXWARN_FLAGS) \
 	-Wmain \
 
 # Compiler-specific flags
-NVCCFLAGS := 
+NVCCFLAGS :=
 CXXFLAGS  := $(CXXWARN_FLAGS)
 CFLAGS    := $(CWARN_FLAGS)
 
@@ -113,7 +113,7 @@ ifeq ($(dbg),1)
 	NVCCFLAGS   += -D_DEBUG
 	BINSUBDIR   := debug
 	LIBSUFFIX   := D
-else 
+else
 	# COMMONFLAGS += -O3  ...optimization does not work :(
 	COMMONFLAGS += -DNDEBUG
 	BINSUBDIR   := release
@@ -181,9 +181,9 @@ ifeq ($(USECUDPP), 1)
 endif
 
 # Libs
-LIB       := -L$(CUDA_INSTALL_PATH)/lib -L$(LIBDIR) -L$(COMMONDIR)/lib/$(OSLOWER) 
+LIB       := -L$(CUDA_INSTALL_PATH)/lib64 -L$(LIBDIR) -L$(COMMONDIR)/lib/$(OSLOWER)
 ifeq ($(USEDRVAPI),1)
-   LIB += -lcuda ${OPENGLLIB} $(PARAMGLLIB) $(RENDERCHECKGLLIB) $(CUDPPLIB) ${LIB} 
+   LIB += -lcuda ${OPENGLLIB} $(PARAMGLLIB) $(RENDERCHECKGLLIB) $(CUDPPLIB) ${LIB}
 else
    LIB += -lcudart ${OPENGLLIB} $(PARAMGLLIB) $(RENDERCHECKGLLIB) $(CUDPPLIB) ${LIB}
 endif
@@ -222,13 +222,14 @@ OBJDIR := $(TARGETDIR)/obj
 ifneq ($(STATIC_LIB),)
 	# TARGETDIR := $(LIBDIR)
 	TARGET   := $(subst .a,$(LIBSUFFIX).a,$(LIBDIR)/$(STATIC_LIB))
-	LINKLINE  = ar qv $(TARGET) $(OBJS) 
+	LINKLINE  = ar qv $(TARGET) $(OBJS)
 else
-	LIB += -lcutil$(LIBSUFFIX)
+	#LIB += -lcutil$(LIBSUFFIX)
+	LIB += -lcudart$(LIBSUFFIX)
 	# Device emulation configuration
 	ifeq ($(emu), 1)
 		NVCCFLAGS   += -deviceemu
-		CUDACCFLAGS += 
+		CUDACCFLAGS +=
 		BINSUBDIR   := emu$(BINSUBDIR)
 		# consistency, makes developing easier
 		CXXFLAGS		+= -D__DEVICE_EMULATION__
@@ -236,12 +237,12 @@ else
 	endif
 	# TARGETDIR := $(BINDIR)/$(BINSUBDIR)
 	TARGET    := $(TARGETDIR)/$(EXECUTABLE)
-	LINKLINE  = $(LINK) -o $(TARGET) $(OBJS) $(LIB)
+	LINKLINE  = $(LINK)  $(OBJS) $(LIB) -fPIC --shared -Wl,-soname,libcuj2k.so.1 -o ../libcuj2k.so
 endif
 
 VERBOSE :=
 
-# check if verbose 
+# check if verbose
 #ifeq ($(verbose), 1)
 #	VERBOSE :=
 #else
@@ -278,7 +279,7 @@ CXXFLAGS  += $(COMMONFLAGS)
 CFLAGS    += $(COMMONFLAGS)
 
 ifeq ($(nvcc_warn_verbose),1)
-	NVCCFLAGS += $(addprefix --compiler-options ,$(CXXWARN_FLAGS)) 
+	NVCCFLAGS += $(addprefix --compiler-options ,$(CXXWARN_FLAGS))
 	NVCCFLAGS += --compiler-options -fno-strict-aliasing
 endif
 
@@ -300,22 +301,22 @@ CUBINS +=  $(patsubst %.cu,$(CUBINDIR)/%.cubin,$(notdir $(CUBINFILES)))
 # Rules
 ################################################################################
 $(OBJDIR)/%.c.o : $(SRCDIR)%.c $(C_DEPS)
-	$(VERBOSE)$(CXX) $(CXXFLAGS) -o $@ -c $<
+	$(VERBOSE)$(CXX) $(CXXFLAGS) -o $@ -c $< -fPIC
 
 $(OBJDIR)/%.cpp.o : $(SRCDIR)%.cpp $(C_DEPS)
-	$(VERBOSE)$(CXX) $(CXXFLAGS) -o $@ -c $<
+	$(VERBOSE)$(CXX) $(CXXFLAGS) -o $@ -c $< -fPIC
 
 $(OBJDIR)/%.cu.o : $(SRCDIR)%.cu $(CU_DEPS)
-	$(VERBOSE)$(NVCC) $(NVCCFLAGS) $(SMVERSIONFLAGS) -o $@ -c $<
+	$(VERBOSE)$(NVCC) $(NVCCFLAGS) $(SMVERSIONFLAGS) -o $@ -c $< -Xcompiler -fPIC
 
 $(CUBINDIR)/%.cubin : $(SRCDIR)%.cu cubindirectory
-	$(VERBOSE)$(NVCC) $(CUBIN_ARCH_FLAG) $(NVCCFLAGS) $(SMVERSIONFLAGS) -o $@ -cubin $<
+	$(VERBOSE)$(NVCC) $(CUBIN_ARCH_FLAG) $(NVCCFLAGS) $(SMVERSIONFLAGS) -o $@ -cubin $< -Xcompiler -fPIC
 
 #
 # The following definition is a template that gets instantiated for each SM
 # version (sm_10, sm_13, etc.) stored in SMVERSIONS.  It does 2 things:
 # 1. It adds to OBJS a .cu_sm_XX.o for each .cu file it finds in CUFILES_sm_XX.
-# 2. It generates a rule for building .cu_sm_XX.o files from the corresponding 
+# 2. It generates a rule for building .cu_sm_XX.o files from the corresponding
 #    .cu file.
 #
 # The intended use for this is to allow Makefiles that use common.mk to compile
@@ -366,6 +367,3 @@ install:
 
 # clobber : clean
 # 	$(VERBOSE)rm -rf $(ROOTOBJDIR)
-
-
-

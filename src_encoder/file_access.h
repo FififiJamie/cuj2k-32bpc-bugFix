@@ -35,12 +35,12 @@ THE SOFTWARE. */
 int write_int(FILE *fp, unsigned int value);
 int write_short(FILE *fp,unsigned short value);
 int write_byte(FILE *fp, unsigned char value);
-extern "C" int write_fileformat (FILE *fp, struct Picture *pic);
+extern "C" int write_fileformat (FILE *fp, struct Picture *pic, int bps);
 int write_JP2header(FILE *fp, int variousBpc, int nc);
-int write_imageheader(FILE *fp, struct Picture *pic);
+int write_imageheader(FILE *fp, struct Picture *pic, int bps);
 int write_colorbox(FILE *fp, int nc);
 extern "C" int write_codestream_box(FILE *fp, struct Buffer *codestream, int format);
-extern "C" int write_output_file(FILE *fp, struct Picture *pic, struct Buffer *codestream, 
-								 int format);
+extern "C" int write_output_file(FILE *fp, struct Picture *pic, struct Buffer *codestream,
+								 int format, int bps);
 
 #endif

@@ -39,6 +39,9 @@ they can be re-used for consecutive encodings.
 
 #include "bitmap.h"
 #include "waveletTransform.h"
+#include <helper_functions.h>  // CUDA SDK Helper functions
+#include <helper_cuda.h>       // CUDA device initialization helper functions
+#include <cuda_runtime.h>
 
 
 
@@ -72,9 +75,9 @@ they can be re-used for consecutive encodings.
 #define N_CONTEXTS 19
 
 //12:reversible, 9:irreversible, so use 12
-#define MAX_BITPLANES 12
+#define MAX_BITPLANES 28
 //max. number of conding passes
-#define MAX_PASSES (3*MAX_BITPLANES - 2)
+#define MAX_PASSES (3*MAX_BITPLANES - 2)  //do not change here!!!
 
 //maximal length of an MQ codeword, so needn't use mallocs
 //pure noise: 4895 bytes (lossless)
@@ -84,7 +87,7 @@ they can be re-used for consecutive encodings.
 
 //size of one MQ encoder in shared memory; aligned to 32bit to avoid conflicts
 //4x 32bit variables   and   2x N_CONTEXTSx 8bit variables
-#define ALIGNED_MQENC_SIZE (((4*sizeof(unsigned) + 2*N_CONTEXTS*sizeof(char) + 3) / 4) * 4)
+#define ALIGNED_MQENC_SIZE (((4*sizeof(unsigned) + 2*N_CONTEXTS*sizeof(char) + 3) / 4) * 4)*2
 //56 bytes => max 292 threads per block
 
 
@@ -112,10 +115,10 @@ struct Codeblock {
 	float slopes[MAX_PASSES+1];
 	//chosen truncation point (index for above arrays)
 	//int trunc_point;
-};
+}__attribute__((aligned(512)));
 
 
-//Data needed for Tier1 
+//Data needed for Tier1
 struct Tier1_Pic {
 	//number of codeblocks, number of allocated codeblocks
 	int n_cbs, n_cbs_alloc;
@@ -152,16 +155,16 @@ extern "C"
 void copy_cbs_to_pic(struct Picture *pic, struct Codeblock *cbs, int mq_buf_size);
 
 extern "C"
-void tier1_pre_and_kernel(struct Picture *pic, 
+void tier1_pre_and_kernel(struct Picture *pic,
 						  struct Tier1_Pic *t1pic,
-						  int threads_per_block, 
-						  int mode /*LOSSY or LOSSLESS*/, 
+						  int threads_per_block,
+						  int mode /*LOSSY or LOSSLESS*/,
 						  int enable_pcrd /*0 or 1*/,
 						  cudaStream_t stream,
 						  int max_cb_per_kernel,
 						  int use_local_mem,
-						  unsigned int timer,
-						  double *time_to_gpu, double *time_from_gpu /*these may be NULL: no timing*/ );
+						  StopWatchInterface *timer,
+						  double *time_to_gpu, double *time_from_gpu /*these may be NULL: no timing*/, int bps );
 
 
 void tier1_post(struct Picture *pic,

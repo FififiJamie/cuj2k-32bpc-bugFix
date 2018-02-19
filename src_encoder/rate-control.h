@@ -23,7 +23,7 @@ THE SOFTWARE. */
 
 /*  Rate-control corresponded functions.
  *
- *  get_standard_qcd* is needed for tier 2 
+ *  get_standard_qcd* is needed for tier 2
  *  get_quantstep needed for DWT and qcd
  *  calc_K_max is needed for Tier1/PCRD
  */
@@ -39,7 +39,7 @@ THE SOFTWARE. */
   Order is LL HL LH HH from highest to lowest level
   Needed for tier2*/
 unsigned short int* get_standard_qcd (int dwt_levels, int quant_enable);
-unsigned char* get_standard_qcd_lossless (int dwt_levels);
+unsigned char* get_standard_qcd_lossless (int dwt_levels, int bps);
 
 
 /*Function to get Quantization step for a subband.
@@ -57,6 +57,6 @@ extern "C" float get_quantstep(int level,int max, SubbandTyp subband, int quant_
    quantstep: 16-bit exp.-mantissa encoded quantization step
    type: type of subband
    mode: lossy or lossless */
-extern "C" int calc_K_max(unsigned short quantstep, SubbandTyp type, int mode);
+extern "C" int calc_K_max(unsigned short quantstep, SubbandTyp type, int mode, int bps);
 
 #endif

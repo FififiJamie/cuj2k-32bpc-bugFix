@@ -31,9 +31,9 @@ with a weight based on DWT type, color channel, subband level
 and subband type. Called from Tier 1 kernel.
 
 __global__ void trunc_size_cb(struct Codeblock *cbs, int n_cbs, float lambda, int *sizes)
-Kernel: each thread calculates the sum of the sizes of 
-some codeblocks (based on the slope value 'lambda') and stores 
-this sum in the array 'sizes'. 
+Kernel: each thread calculates the sum of the sizes of
+some codeblocks (based on the slope value 'lambda') and stores
+this sum in the array 'sizes'.
 
 int trunc_size_pic(...., float lambda, .....)
 Calculates the size of the whole picture for given lambda.
@@ -65,7 +65,7 @@ for each slope value
 __constant__ float SUBB_WEIGHTS_REVERSIBLE[WEIGHT_MAX_CHANNEL+1][WEIGHT_MAX_LEVEL+1][5] = {
 // ...Y
 {
-//  subdiv     LH,      HL,      HH,     LLend 
+//  subdiv     LH,      HL,      HH,     LLend
 	{ 0.0f, 0.1000f, 0.1000f, 0.0500f, 1.0000f},  //level 0 = biggest subbands (unimportant)
 	{ 0.0f, 0.2000f, 0.2000f, 0.1000f, 1.0000f},  //      1
 	{ 0.0f, 0.4000f, 0.4000f, 0.2000f, 1.0000f},  //      2
@@ -74,12 +74,12 @@ __constant__ float SUBB_WEIGHTS_REVERSIBLE[WEIGHT_MAX_CHANNEL+1][WEIGHT_MAX_LEVE
 	{ 0.0f, 0.0010f, 0.0010f, 0.0005f, 1.0000f},  //HH was 0.0013f before
 	{ 0.0f, 0.1000f, 0.1000f, 0.0250f, 1.0000f},
 	{ 0.0f, 0.3000f, 0.3000f, 0.0800f, 1.0000f},
-	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f} 
+	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f}
 } };
 
 // ...Y2
 /*{
-//  subdiv     LH,      HL,      HH,     LLend 
+//  subdiv     LH,      HL,      HH,     LLend
 	{ 0.0f, 0.1000f, 0.1000f, 0.0500f, 1.0000f},  //level 0 = biggest subbands (unimportant)
 	{ 0.0f, 0.2000f, 0.2000f, 0.1000f, 1.0000f},  //      1
 	{ 0.0f, 0.4000f, 0.4000f, 0.2000f, 1.0000f},  //      2
@@ -88,14 +88,14 @@ __constant__ float SUBB_WEIGHTS_REVERSIBLE[WEIGHT_MAX_CHANNEL+1][WEIGHT_MAX_LEVE
 	{ 0.0f, 0.0010f, 0.0010f, 0.0005f, 1.0000f},  //HH was 0.0013f before
 	{ 0.0f, 0.1000f, 0.1000f, 0.0500f, 1.0000f},
 	{ 0.0f, 0.3000f, 0.3000f, 0.1500f, 1.0000f},
-	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f} 
+	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f}
 } };*/
 
 
 __constant__ float SUBB_WEIGHTS_IRREVERSIBLE[WEIGHT_MAX_CHANNEL+1][WEIGHT_MAX_LEVEL+1][5] = {
-// ...X 
+// ...X
 /*{
-//  subdiv     LH,      HL,      HH,     LLend 
+//  subdiv     LH,      HL,      HH,     LLend
 	{ 0.0f, 0.1000f, 0.1000f, 0.0250f, 1.0000f},  //level 0 = biggest subbands (unimportant)
 	{ 0.0f, 0.2000f, 0.2000f, 0.0500f, 1.0000f},  //      1
 	{ 0.0f, 0.4000f, 0.4000f, 0.1000f, 1.0000f},  //      2
@@ -104,13 +104,13 @@ __constant__ float SUBB_WEIGHTS_IRREVERSIBLE[WEIGHT_MAX_CHANNEL+1][WEIGHT_MAX_LE
 	{ 0.0f, 0.0100f, 0.0100f, 0.0025f, 1.0000f},
 	{ 0.0f, 0.1000f, 0.1000f, 0.0250f, 1.0000f},
 	{ 0.0f, 0.3000f, 0.3000f, 0.0800f, 1.0000f},
-	{ 0.0f, 0.8000f, 0.8000f, 0.2000f, 1.0000f} 
+	{ 0.0f, 0.8000f, 0.8000f, 0.2000f, 1.0000f}
 } };*/
 
 
 //...X1
 /*{
-//  subdiv     LH,      HL,      HH,     LLend 
+//  subdiv     LH,      HL,      HH,     LLend
 	{ 0.0f, 0.1000f, 0.1000f, 0.0500f, 1.0000f},  //level 0 = biggest subbands (unimportant)
 	{ 0.0f, 0.2000f, 0.2000f, 0.1000f, 1.0000f},  //      1
 	{ 0.0f, 0.4000f, 0.4000f, 0.2000f, 1.0000f},  //      2
@@ -119,12 +119,12 @@ __constant__ float SUBB_WEIGHTS_IRREVERSIBLE[WEIGHT_MAX_CHANNEL+1][WEIGHT_MAX_LE
 	{ 0.0f, 0.0010f, 0.0010f, 0.0013f, 1.0000f},
 	{ 0.0f, 0.1000f, 0.1000f, 0.0250f, 1.0000f},
 	{ 0.0f, 0.3000f, 0.3000f, 0.0800f, 1.0000f},
-	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f} 
+	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f}
 } };*/
 
 //...X2
 {
-//  subdiv     LH,      HL,      HH,     LLend 
+//  subdiv     LH,      HL,      HH,     LLend
 	{ 0.0f, 0.0100f, 0.0100f, 0.0050f, 1.0000f},  //level 0 = biggest subbands (unimportant)
 	{ 0.0f, 0.2000f, 0.2000f, 0.1000f, 1.0000f},  //      1
 	{ 0.0f, 0.4000f, 0.4000f, 0.2000f, 1.0000f},  //      2
@@ -133,7 +133,7 @@ __constant__ float SUBB_WEIGHTS_IRREVERSIBLE[WEIGHT_MAX_CHANNEL+1][WEIGHT_MAX_LE
 	{ 0.0f, 0.0010f, 0.0010f, 0.0005f, 1.0000f},  //HH was 0.0013f before
 	{ 0.0f, 0.1000f, 0.1000f, 0.0250f, 1.0000f},
 	{ 0.0f, 0.3000f, 0.3000f, 0.0800f, 1.0000f},
-	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f} 
+	{ 0.0f, 0.8000f, 0.8000f, 0.4000f, 1.0000f}
 } };
 
 
@@ -172,7 +172,7 @@ void pcrd_calc_slopes(struct Codeblock *cb,
 			dist[pass] *= SUBB_WEIGHTS_IRREVERSIBLE[color_channel][dwt_level][(int)subb_type]
 						  * quantstep * quantstep / (float)(cb->Xdim * cb->Ydim);
 	}
-	
+
 	cb->slopes[0] = ALMOST_INF; // +INF
 	n_feasible = 1;
 	cb->feasible_passes[0] = 0;
@@ -201,7 +201,7 @@ void pcrd_calc_slopes(struct Codeblock *cb,
 		cb->slopes[i] = cb->slopes[pass];
 		if((cb->slopes[i] > *slope_max) && (i != 0)) //don't store +INF
 			*slope_max = cb->slopes[i];
-		//printf("passes=%d   len=%d   slope=%f\n", 
+		//printf("passes=%d   len=%d   slope=%f\n",
 		//	cb->feasible_passes[i], cb->trunc_len[i], cb->slopes[i]);
 	}
 	//printf("\n");
@@ -263,9 +263,9 @@ int trunc_size_pic(struct Codeblock *cbs_d, int n_cbs, float lambda,
 	dim3 dimBlock(THREADS_PER_BLOCK_PCRD);
 	trunc_size_cb<<< dimGrid, dimBlock, 0, stream >>>(cbs_d, n_cbs, lambda, sizes_d);
 	//waits automatically for kernel to finish
-	cutilSafeCall(cudaMemcpyAsync(sizes_h, sizes_d, sizeof(int)*n_threads, 
+	checkCudaErrors(cudaMemcpyAsync(sizes_h, sizes_d, sizeof(int)*n_threads,
 		cudaMemcpyDeviceToHost, stream));
-	cutilSafeCall(cudaStreamSynchronize(stream)); //wait, we need the values to sum up
+	checkCudaErrors(cudaStreamSynchronize(stream)); //wait, we need the values to sum up
 
 	for(size=i=0; i < n_threads; i++)
 		size += sizes_h[i];
@@ -280,7 +280,7 @@ int trunc_size_pic(struct Codeblock *cbs_d, int n_cbs, float lambda,
 #define DIFF_RATIO 0.02f
 #define MIN_DIFF 400
 //2nd part of PCRD: finds the optimal lambda value for the given filesize
-void pcrd_opt(struct Tier1_Pic *t1pic, struct Codeblock *cbs_d, int n_cbs, int n_ch_tiles, 
+void pcrd_opt(struct Tier1_Pic *t1pic, struct Codeblock *cbs_d, int n_cbs, int n_ch_tiles,
 			  float slope_max, int target_size, cudaStream_t stream)
 {
 	float lambda_min = -1.0f, lambda_max = slope_max * 2.0f, lambda_mid;
@@ -296,28 +296,28 @@ void pcrd_opt(struct Tier1_Pic *t1pic, struct Codeblock *cbs_d, int n_cbs, int n
 	if(n_threads > t1pic->pcrd_sizes_alloc) {
 		t1pic->pcrd_sizes_alloc = n_threads;
 
-		cutilSafeCall(cudaFreeHost(t1pic->pcrd_sizes_h));
-		cutilSafeCall(cudaFree(t1pic->pcrd_sizes_d));
+		checkCudaErrors(cudaFreeHost(t1pic->pcrd_sizes_h));
+		checkCudaErrors(cudaFree(t1pic->pcrd_sizes_d));
 
-		cutilSafeCall(cudaMallocHost((void**)&t1pic->pcrd_sizes_h, sizeof(int)*n_threads));
-		cutilSafeCall(cudaMalloc((void**)&t1pic->pcrd_sizes_d, sizeof(int)*n_threads));
+		checkCudaErrors(cudaMallocHost((void**)&t1pic->pcrd_sizes_h, sizeof(int)*n_threads));
+		checkCudaErrors(cudaMalloc((void**)&t1pic->pcrd_sizes_d, sizeof(int)*n_threads));
 	}
 
 	overhead = FILE_OVERHEAD + n_ch_tiles*TILE_OVERHEAD + n_cbs*CB_OVERHEAD;
 	//printf("lambda_min: %f   lambda_max: %f\n", lambda_min, lambda_max);
 
 	//when target size is out of possible range, algorithm needn't be run
-	min_size = trunc_size_pic(cbs_d, n_cbs, lambda_max, n_threads, n_blocks, 
+	min_size = trunc_size_pic(cbs_d, n_cbs, lambda_max, n_threads, n_blocks,
 		                      t1pic->pcrd_sizes_d, t1pic->pcrd_sizes_h, stream) + overhead;
 	if(target_size <= min_size) {
-		printf("pcrd: target size %0.1lfk is too small => using %0.1lfk.\n", 
+		printf("pcrd: target size %0.1lfk is too small => using %0.1lfk.\n",
 			(double)target_size/1000.0, (double)min_size/1000.0);
 		return; //data is already truncated to smallest size
 	}
-	max_size = trunc_size_pic(cbs_d, n_cbs, lambda_min, n_threads, n_blocks, 
+	max_size = trunc_size_pic(cbs_d, n_cbs, lambda_min, n_threads, n_blocks,
 		                      t1pic->pcrd_sizes_d, t1pic->pcrd_sizes_h, stream) + overhead;
 	if(target_size >= max_size) {
-		printf("pcrd: target size %0.1lfk is too big => using %0.1lfk.\n", 
+		printf("pcrd: target size %0.1lfk is too big => using %0.1lfk.\n",
 			(double)target_size/1000.0, (double)max_size/1000.0);
 		return; //data is already truncated to biggest size
 	}
@@ -329,7 +329,7 @@ void pcrd_opt(struct Tier1_Pic *t1pic, struct Codeblock *cbs_d, int n_cbs, int n
 	do {
 		lambda_mid = 0.5f * (lambda_min+lambda_max);
 
-		size = trunc_size_pic(cbs_d, n_cbs, lambda_mid, n_threads, n_blocks, 
+		size = trunc_size_pic(cbs_d, n_cbs, lambda_mid, n_threads, n_blocks,
 		                      t1pic->pcrd_sizes_d, t1pic->pcrd_sizes_h, stream) + overhead;
 
 		if(size < target_size)
@@ -348,6 +348,6 @@ void pcrd_opt(struct Tier1_Pic *t1pic, struct Codeblock *cbs_d, int n_cbs, int n
 	//assert(iterations<MAX_ITERATIONS); //shouldn't happen => stop
 	/*if(iterations==MAX_ITERATIONS)
 		printf("PCRD: max. iterations reached\n");*/
-	//cutilSafeCall(cudaFreeHost(sizes_h));
-	//cutilSafeCall(cudaFree(sizes_d));
+	//checkCudaErrors(cudaFreeHost(sizes_h));
+	//checkCudaErrors(cudaFree(sizes_d));
 }

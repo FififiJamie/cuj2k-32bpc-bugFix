@@ -39,8 +39,8 @@ copies codeblocks back to host; if no local memory was used, also
 copies output buffers back to host. Asynchronous.
 
 struct Raw_CB
-input codeblock, pointer v points to top-left position in subband; 
-stores codeblock width and height; also stores information about 
+input codeblock, pointer v points to top-left position in subband;
+stores codeblock width and height; also stores information about
 the color channel and the subband (for PCRD)
 
 void tier1_pic_reset(struct Tier1_Pic *t1pic)
@@ -61,8 +61,10 @@ Free all memory allocated for Tier 1
 #include <math.h>
 #include <float.h>
 #include <time.h>
-#include <cutil.h>
-#include <cutil_inline.h>
+//#include <cutil.h>
+//#include <cutil_inline.h>
+#include <helper_cuda.h>
+#include <helper_timer.h>
 #include "tier1.h"
 #include "rate-control.h"
 #include "waveletTransform.h"
@@ -90,8 +92,9 @@ struct Raw_CB {
 	SubbandTyp subbType;
 	float subb_quantstep;
 };
+//__attribute__((aligned(64)));
 
-extern __shared__ char s_data[];
+extern __shared__ __align__(8) char s_data[];
 
 #include "pcrd.cu"
 #include "mq-coder.cu"
@@ -125,39 +128,39 @@ void tier1_capacity(struct Tier1_Pic *t1pic, int n_cbs, int bufsize_d, int bufsi
 
 		t1pic->n_cbs = t1pic->n_cbs_alloc = n_cbs;
 
-		cutilSafeCall(cudaFreeHost(t1pic->rawcbs_h));
-		cutilSafeCall(cudaFreeHost(t1pic->cbs_h));
-		cutilSafeCall(cudaFree(t1pic->rawcbs_d));
-		cutilSafeCall(cudaFree(t1pic->cbs_d));
+		checkCudaErrors(cudaFreeHost(t1pic->rawcbs_h));
+		checkCudaErrors(cudaFreeHost(t1pic->cbs_h));
+		checkCudaErrors(cudaFree(t1pic->rawcbs_d));
+		checkCudaErrors(cudaFree(t1pic->cbs_d));
 
 		if(!use_local_mem) {
-			cutilSafeCall(cudaFree(t1pic->global_states_d));
-			cutilSafeCall(cudaFree(t1pic->global_dist_d));
-			cutilSafeCall(cudaFree(t1pic->global_saved_states_d));
+			checkCudaErrors(cudaFree(t1pic->global_states_d));
+			checkCudaErrors(cudaFree(t1pic->global_dist_d));
+			checkCudaErrors(cudaFree(t1pic->global_saved_states_d));
 
-			cutilSafeCall(cudaMalloc((void**)&t1pic->global_states_d,    MAX_STATE_ARRAY_SIZE * n_cbs * sizeof(unsigned)));
-			cutilSafeCall(cudaMalloc((void**)&t1pic->global_dist_d,         sizeof(float)*PCRD_TEMP_ARRAY_SIZE*n_cbs));
-			cutilSafeCall(cudaMalloc((void**)&t1pic->global_saved_states_d, sizeof(uint4)*PCRD_TEMP_ARRAY_SIZE*n_cbs));
+			checkCudaErrors(cudaMalloc((void**)&t1pic->global_states_d,    MAX_STATE_ARRAY_SIZE * n_cbs * sizeof(unsigned)));
+			checkCudaErrors(cudaMalloc((void**)&t1pic->global_dist_d,         sizeof(float)*PCRD_TEMP_ARRAY_SIZE*n_cbs));
+			checkCudaErrors(cudaMalloc((void**)&t1pic->global_saved_states_d, sizeof(uint4)*PCRD_TEMP_ARRAY_SIZE*n_cbs));
 		}
 
-		cutilSafeCall(cudaMallocHost((void**)&t1pic->rawcbs_h, sizeof(struct Raw_CB) * n_cbs));
-		cutilSafeCall(cudaMallocHost((void**)&t1pic->cbs_h, sizeof(struct Codeblock) * n_cbs));
-		cutilSafeCall(cudaMalloc((void**)&t1pic->rawcbs_d, sizeof(struct Raw_CB)     * n_cbs));
-		cutilSafeCall(cudaMalloc((void**)&t1pic->cbs_d,    sizeof(struct Codeblock)  * n_cbs));
+		checkCudaErrors(cudaMallocHost((void**)&t1pic->rawcbs_h, sizeof(struct Raw_CB) * n_cbs));
+		checkCudaErrors(cudaMallocHost((void**)&t1pic->cbs_h, sizeof(struct Codeblock) * n_cbs));
+		checkCudaErrors(cudaMalloc((void**)&t1pic->rawcbs_d, sizeof(struct Raw_CB)     * n_cbs));
+		checkCudaErrors(cudaMalloc((void**)&t1pic->cbs_d,    sizeof(struct Codeblock)  * n_cbs));
 	}
 	else
 		t1pic->n_cbs = n_cbs;
 
 	if(bufsize_d > t1pic->global_buf_alloc_d) {
 		//printf("malloc device buffers\n");
-		cutilSafeCall(cudaFree(t1pic->global_buf_d));
-		cutilSafeCall(cudaMalloc((void**)&t1pic->global_buf_d, bufsize_d));
+		checkCudaErrors(cudaFree(t1pic->global_buf_d));
+		checkCudaErrors(cudaMalloc((void**)&t1pic->global_buf_d, bufsize_d));
 		t1pic->global_buf_alloc_d = bufsize_d;
 	}
 	if(bufsize_h > t1pic->global_buf_alloc_h) {
 		//printf("malloc host buffers\n");
-		cutilSafeCall(cudaFreeHost(t1pic->global_buf_h));
-		cutilSafeCall(cudaMallocHost((void**)&t1pic->global_buf_h, bufsize_h));
+		checkCudaErrors(cudaFreeHost(t1pic->global_buf_h));
+		checkCudaErrors(cudaMallocHost((void**)&t1pic->global_buf_h, bufsize_h));
 		t1pic->global_buf_alloc_h = bufsize_h;
 	}
 
@@ -165,31 +168,31 @@ void tier1_capacity(struct Tier1_Pic *t1pic, int n_cbs, int bufsize_d, int bufsi
 	if(t1pic->slope_max_d == NULL) {
 		//printf("malloc slope_max\n");
 
-		cutilSafeCall(cudaMalloc((void**)&t1pic->slope_max_d, sizeof(float)));
-		cutilSafeCall(cudaMallocHost((void**)&t1pic->slope_max_h, sizeof(float)));
+		checkCudaErrors(cudaMalloc((void**)&t1pic->slope_max_d, sizeof(float)));
+		checkCudaErrors(cudaMallocHost((void**)&t1pic->slope_max_h, sizeof(float)));
 	}
 }
 
 void tier1_free(struct Tier1_Pic *t1pic) {
-	cutilSafeCall(cudaFreeHost(t1pic->rawcbs_h)); t1pic->rawcbs_h=NULL;
-	cutilSafeCall(cudaFreeHost(t1pic->cbs_h));    t1pic->cbs_h = NULL;
-	cutilSafeCall(cudaFree(t1pic->rawcbs_d));     t1pic->rawcbs_d=NULL;
-	cutilSafeCall(cudaFree(t1pic->cbs_d));        t1pic->cbs_d=NULL;
+	checkCudaErrors(cudaFreeHost(t1pic->rawcbs_h)); t1pic->rawcbs_h=NULL;
+	checkCudaErrors(cudaFreeHost(t1pic->cbs_h));    t1pic->cbs_h = NULL;
+	checkCudaErrors(cudaFree(t1pic->rawcbs_d));     t1pic->rawcbs_d=NULL;
+	checkCudaErrors(cudaFree(t1pic->cbs_d));        t1pic->cbs_d=NULL;
 
-	//cutilSafeCall(cudaFree(t1pic->global_trunc_len_d));	t1pic->global_trunc_len_d=NULL;
-	cutilSafeCall(cudaFree(t1pic->global_dist_d));			t1pic->global_dist_d=NULL;
-	cutilSafeCall(cudaFree(t1pic->global_saved_states_d)); t1pic->global_saved_states_d=NULL;
+	//checkCudaErrors(cudaFree(t1pic->global_trunc_len_d));	t1pic->global_trunc_len_d=NULL;
+	checkCudaErrors(cudaFree(t1pic->global_dist_d));			t1pic->global_dist_d=NULL;
+	checkCudaErrors(cudaFree(t1pic->global_saved_states_d)); t1pic->global_saved_states_d=NULL;
 
-	cutilSafeCall(cudaFree(t1pic->global_states_d));  t1pic->global_states_d=NULL;
+	checkCudaErrors(cudaFree(t1pic->global_states_d));  t1pic->global_states_d=NULL;
 
-	cutilSafeCall(cudaFreeHost(t1pic->global_buf_h)); t1pic->global_buf_h=NULL;
-	cutilSafeCall(cudaFree(t1pic->global_buf_d));     t1pic->global_buf_d=NULL;
+	checkCudaErrors(cudaFreeHost(t1pic->global_buf_h)); t1pic->global_buf_h=NULL;
+	checkCudaErrors(cudaFree(t1pic->global_buf_d));     t1pic->global_buf_d=NULL;
 
-	cutilSafeCall(cudaFree(t1pic->slope_max_d));      t1pic->slope_max_d=NULL; 
-	cutilSafeCall(cudaFreeHost(t1pic->slope_max_h));  t1pic->slope_max_h=NULL;
+	checkCudaErrors(cudaFree(t1pic->slope_max_d));      t1pic->slope_max_d=NULL;
+	checkCudaErrors(cudaFreeHost(t1pic->slope_max_h));  t1pic->slope_max_h=NULL;
 
-	cutilSafeCall(cudaFreeHost(t1pic->pcrd_sizes_h)); t1pic->pcrd_sizes_h=NULL;
-	cutilSafeCall(cudaFree(t1pic->pcrd_sizes_d));     t1pic->pcrd_sizes_d=NULL;
+	checkCudaErrors(cudaFreeHost(t1pic->pcrd_sizes_h)); t1pic->pcrd_sizes_h=NULL;
+	checkCudaErrors(cudaFree(t1pic->pcrd_sizes_d));     t1pic->pcrd_sizes_d=NULL;
 }
 
 
@@ -223,10 +226,10 @@ int count_cb_pic(struct Picture *pic, int cb_xdim, int cb_ydim) {
 
 
 // ****************** copying Raw_CBs from Picture to plain array
-void copy_subb_to_rawcbs(subband *subb, 
-						 int dwt_level, 
-						 struct Raw_CB *rawcbs, 
-						 struct Codeblock *cbs, 
+void copy_subb_to_rawcbs(subband *subb,
+						 int dwt_level,
+						 struct Raw_CB *rawcbs,
+						 struct Codeblock *cbs,
 						 int *cb_i,
 						 int bmp_width,
 						 int cb_xdim, int cb_ydim, int channel)
@@ -254,8 +257,8 @@ void copy_subb_to_rawcbs(subband *subb,
 			(int)subb->Typ, subb->Xdim, subb->Ydim, subb->nCodeblocks);
 
 		//DEBUG: copy subband data from host to device ******************
-		//cutilSafeCall(cudaMalloc((void**)&(subb->daten_d), sizeof(int) * subb->Xdim * subb->Ydim));
-		//cutilSafeCall(cudaMemcpy(subb->daten_d, subb->daten, sizeof(int) * subb->Xdim * subb->Ydim, cudaMemcpyHostToDevice));
+		//checkCudaErrors(cudaMalloc((void**)&(subb->daten_d), sizeof(int) * subb->Xdim * subb->Ydim));
+		//checkCudaErrors(cudaMemcpy(subb->daten_d, subb->daten, sizeof(int) * subb->Xdim * subb->Ydim, cudaMemcpyHostToDevice));
 		//TODO: remove^^ *************************************************
 
 		/* partitioning into codeblocks */
@@ -289,10 +292,10 @@ void copy_subb_to_rawcbs(subband *subb,
 	}
 }
 
-void copy_pic_to_rawcbs(struct Picture *pic, 
-						struct Raw_CB *rawcbs, 
+void copy_pic_to_rawcbs(struct Picture *pic,
+						struct Raw_CB *rawcbs,
 						struct Codeblock *cbs,
-						int cb_xdim, int cb_ydim) 
+						int cb_xdim, int cb_ydim)
 {
 	int tile_i, ch_i, cb_i=0;
 	for(tile_i = 0; tile_i < pic->tile_number; tile_i++) {
@@ -330,14 +333,18 @@ void copy_cbs_to_subb(subband *subb, struct Codeblock *cbs, int *cb_i, int *max_
 		int cb_i_subb;
 		struct Codeblock *cb;
 		subb->K_msbs = (int*) malloc(sizeof(int) * subb->nCodeblocks);
-		//cutilSafeCall(cudaFree(subb->daten_d));
+		//checkCudaErrors(cudaFree(subb->daten_d));
 
 		for(cb_i_subb=0; cb_i_subb < subb->nCodeblocks; cb_i_subb++) {
 			//needn't copy codeblocks
 			//subb->codeblocks[cb_i_subb] = cbs[*cb_i];
 			cb = &(subb->codeblocks[cb_i_subb]);
 
-			subb->K_msbs[cb_i_subb] = subb->K_max - cb->nBitplanes;
+			subb->K_msbs[cb_i_subb] = subb->K_max - cb->nBitplanes; //for decoder to put the first bit
+
+			if(subb->K_msbs[cb_i_subb]<0)
+			printf("msb warning!!!!!!!!!!!\n");
+
 			assert(subb->K_msbs[cb_i_subb] >= 0);
 
 			*max_mq_len = max(*max_mq_len, cb->L);
@@ -364,7 +371,7 @@ void copy_cbs_to_pic(struct Picture *pic, struct Codeblock *cbs, int mq_buf_size
 	//printf("max_mq_len %d\n", max_mq_len);
 	if(max_mq_len > mq_buf_size) {
 		//should never occur, size should be sufficient
-		printf("Tier1 error: needed %d bytes per MQ buffer, but only %d allocated.\n", 
+		printf("Tier1 error: needed %d bytes per MQ buffer, but only %d allocated.\n",
 			max_mq_len, mq_buf_size);
 	}
 	//printf("copied %d cbs back to picture\n", cb_i);
@@ -378,16 +385,16 @@ void copy_cbs_to_pic(struct Picture *pic, struct Codeblock *cbs, int mq_buf_size
 //********************************** Preparation + Kernel invocation
 
 //target_size is used if PCRD is enabled, else it is not used
-void tier1_pre_and_kernel(struct Picture *pic, 
+void tier1_pre_and_kernel(struct Picture *pic,
 						  struct Tier1_Pic *t1pic,
-						  int threads_per_block, 
-						  int mode /*LOSSY or LOSSLESS*/, 
+						  int threads_per_block,
+						  int mode /*LOSSY or LOSSLESS*/,
 						  int enable_pcrd /*0 or 1*/,
 						  cudaStream_t stream,
 						  int max_cb_per_kernel,
 						  int use_local_mem,
-						  unsigned int timer,
-						  double *time_to_gpu, double *time_from_gpu)
+						  StopWatchInterface *timer,
+						  double *time_to_gpu, double *time_from_gpu, int bps)
 {
 	int cb_xdim = (1 << (pic->cb_xdim_exp));
 	int cb_ydim = (1 << (pic->cb_ydim_exp));
@@ -411,11 +418,11 @@ void tier1_pre_and_kernel(struct Picture *pic,
 
 	//TODO: different values for reversible/irreversible
 	int mq_buf_size;
-	
+
 	if(mode==LOSSLESS) {
-		if(cb_xdim==64)       mq_buf_size=5000;
-		else if (cb_xdim==32) mq_buf_size=1500;
-		else /*16*/           mq_buf_size= 352;
+		if(cb_xdim==64)       mq_buf_size=6000*(bps/8);
+		else if (cb_xdim==32) mq_buf_size=1700*(bps/8);
+		else /*16*/           mq_buf_size= 452*(bps/8);
 	}
 	else {
 		if(cb_xdim==64)       mq_buf_size=4000;
@@ -437,36 +444,37 @@ void tier1_pre_and_kernel(struct Picture *pic,
 			n_cbs * mq_buf_size /*host-buf*/, use_local_mem);
 	}
 	else {
-		tier1_capacity(t1pic, n_cbs, n_cbs * mq_buf_size, 
+		tier1_capacity(t1pic, n_cbs, n_cbs * mq_buf_size,
 			n_cbs * mq_buf_size /*host-buf*/, use_local_mem);
 	}
 
 	copy_pic_to_rawcbs(pic, t1pic->rawcbs_h, t1pic->cbs_h, cb_xdim, cb_ydim);
 
 	if(time_to_gpu != NULL) {
-		cutilSafeCall(cudaThreadSynchronize());
-		cutResetTimer(timer);
-		cutStartTimer(timer);
+		checkCudaErrors(cudaThreadSynchronize());
+		sdkResetTimer(&timer);
+		sdkStartTimer(&timer);
 	}
 
-	cutilSafeCall(cudaMemcpyAsync(t1pic->rawcbs_d, t1pic->rawcbs_h, 
+	checkCudaErrors(cudaMemcpyAsync(t1pic->rawcbs_d, t1pic->rawcbs_h,
 		sizeof(struct Raw_CB) * n_cbs, cudaMemcpyHostToDevice, stream));
 
 	if(time_to_gpu != NULL) {
-		cutilSafeCall(cudaThreadSynchronize());
-		cutStopTimer(timer);
-		*time_to_gpu = cutGetTimerValue(timer);
+		checkCudaErrors(cudaThreadSynchronize());
+		sdkStopTimer(&timer);
+		*time_to_gpu = sdkGetTimerValue(&timer);
 	}
 
-	//cutilSafeCall(cudaStreamSynchronize(stream));
+	//checkCudaErrors(cudaStreamSynchronize(stream));
 
 	//write 0.0f == 0x00000000
 	if(enable_pcrd)
-		cutilSafeCall(cudaMemset(t1pic->slope_max_d, 0, sizeof(float)));
+		checkCudaErrors(cudaMemset(t1pic->slope_max_d, 0, sizeof(float)));
 
 	dim3 dimBlock(threads_per_block);
 	//dim3 dimGrid((n_cbs + threads_per_block - 1) / threads_per_block);
 	int s_mem_size = threads_per_block * ALIGNED_MQENC_SIZE;
+	//printf(" ~~~~~~~~~~~~~ALIGNED_MQENC_SIZE= %d\n",  ALIGNED_MQENC_SIZE);
 
 	//printf("kernel %dx%d threads, %d codeblocks\n", dimGrid.x, dimBlock.x, n_cbs);
 	//double kernel_time = (double)clock()/(double)CLOCKS_PER_SEC;
@@ -480,40 +488,46 @@ void tier1_pre_and_kernel(struct Picture *pic,
 		int n_cb_encode = min(max_cb_per_kernel, n_cbs);
 		dim3 dimGrid((n_cb_encode + threads_per_block - 1) / threads_per_block);
 
+
+
 		if(use_local_mem) {
+			//printf("use local mem\n");
 			encode_cb_kernel_local_mem<<< dimGrid, dimBlock, s_mem_size, stream >>>
-				(t1pic->rawcbs_d + start_idx, t1pic->cbs_d + start_idx, n_cb_encode, 
+				(t1pic->rawcbs_d + start_idx, t1pic->cbs_d + start_idx, n_cb_encode,
 				 t1pic->slope_max_d, pic->xSize, mode, enable_pcrd,
 				 t1pic->global_buf_d,
-				 t1pic->global_buf_h + start_idx*mq_buf_size, 			
+				 t1pic->global_buf_h + start_idx*mq_buf_size,
 				 mq_buf_size);
-			cutilCheckMsg("Tier 1 kernel failed!");
+			getLastCudaError("Tier 1 kernel failed!");
+			//cudaDeviceSynchronize();
+			//getLastCudaError("~~~~~~~~~~~~~~~~~~~~~~~~~");
 
 			if(time_from_gpu != NULL) {
-				cutilSafeCall(cudaThreadSynchronize());
-				cutResetTimer(timer);
-				cutStartTimer(timer);
+				checkCudaErrors(cudaThreadSynchronize());
+				sdkResetTimer(&timer);
+				sdkStartTimer(&timer);
 			}
 
-			cutilSafeCall(cudaMemcpyAsync(t1pic->global_buf_h + start_idx*mq_buf_size, 
-				t1pic->global_buf_d, n_cb_encode * t1pic->mq_buf_size, 
+			checkCudaErrors(cudaMemcpyAsync(t1pic->global_buf_h + start_idx*mq_buf_size,
+				t1pic->global_buf_d, n_cb_encode * t1pic->mq_buf_size,
 				cudaMemcpyDeviceToHost, stream));
 
 			if(time_from_gpu != NULL) {
-				cutilSafeCall(cudaThreadSynchronize());
-				cutStopTimer(timer);
-				*time_from_gpu += cutGetTimerValue(timer);
+				checkCudaErrors(cudaThreadSynchronize());
+				sdkStopTimer(&timer);
+				*time_from_gpu += sdkGetTimerValue(&timer);
 			}
-		} 
+		}
 		else {
+			//printf("use global mem\n");
 			encode_cb_kernel_global_mem<<< dimGrid, dimBlock, s_mem_size, stream >>>
-				(t1pic->rawcbs_d + start_idx, t1pic->cbs_d + start_idx, n_cb_encode, 
+				(t1pic->rawcbs_d + start_idx, t1pic->cbs_d + start_idx, n_cb_encode,
 				 t1pic->slope_max_d, pic->xSize, mode, enable_pcrd,
 				 t1pic->global_buf_d + start_idx*mq_buf_size,
-				 t1pic->global_buf_h + start_idx*mq_buf_size, 			
-				 mq_buf_size, 
+				 t1pic->global_buf_h + start_idx*mq_buf_size,
+				 mq_buf_size,
 				 t1pic->global_states_d       + MAX_STATE_ARRAY_SIZE*start_idx,
-				 t1pic->global_dist_d         + PCRD_TEMP_ARRAY_SIZE*start_idx, 
+				 t1pic->global_dist_d         + PCRD_TEMP_ARRAY_SIZE*start_idx,
 				 t1pic->global_saved_states_d + PCRD_TEMP_ARRAY_SIZE*start_idx);
 		}
 
@@ -538,10 +552,10 @@ void tier1_post(struct Picture *pic,
 
 	if(enable_pcrd) {
 		//printf("pcrd!\n");
-		cutilSafeCall(cudaMemcpyAsync(t1pic->slope_max_h, t1pic->slope_max_d, sizeof(float), 
+		checkCudaErrors(cudaMemcpyAsync(t1pic->slope_max_h, t1pic->slope_max_d, sizeof(float),
 			cudaMemcpyDeviceToHost, stream));
 		cudaStreamSynchronize(stream); //must have slope value copied!
-		pcrd_opt(t1pic, t1pic->cbs_d, t1pic->n_cbs, pic->channels * pic->tile_number, 
+		pcrd_opt(t1pic, t1pic->cbs_d, t1pic->n_cbs, pic->channels * pic->tile_number,
 			*(t1pic->slope_max_h), target_size, stream);
 	}
 
@@ -557,15 +571,16 @@ void tier1_post(struct Picture *pic,
 
 void tier1_memcpy_async(struct Tier1_Pic *t1pic, cudaStream_t stream, int use_local_mem) {
 	//copy codeblock data back to Picture
-	cutilSafeCall(cudaMemcpyAsync(t1pic->cbs_h, t1pic->cbs_d, sizeof(struct Codeblock) * t1pic->n_cbs, 
+	checkCudaErrors(cudaMemcpyAsync(t1pic->cbs_h, t1pic->cbs_d, sizeof(struct Codeblock) * t1pic->n_cbs,
 		cudaMemcpyDeviceToHost, stream));
 
 	if(!use_local_mem) {
-		cutilSafeCall(cudaMemcpyAsync(t1pic->global_buf_h, 
-				t1pic->global_buf_d, t1pic->n_cbs * t1pic->mq_buf_size, 
+		checkCudaErrors(cudaMemcpyAsync(t1pic->global_buf_h,
+				t1pic->global_buf_d, t1pic->n_cbs * t1pic->mq_buf_size,
 				cudaMemcpyDeviceToHost, stream));
 	}
+	//printf("cudaGetLastError 0; %s\n",cudaGetErrorString(cudaGetLastError()));
 
-	/*cutilSafeCall(cudaMemcpyAsync(t1pic->global_buf_h, t1pic->global_buf_d, t1pic->global_buf_used, 
+	/*checkCudaErrors(cudaMemcpyAsync(t1pic->global_buf_h, t1pic->global_buf_d, t1pic->global_buf_used,
 		cudaMemcpyDeviceToHost, stream));*/
 }

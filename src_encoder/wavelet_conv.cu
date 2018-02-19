@@ -23,7 +23,7 @@ THE SOFTWARE. */
 
 
 /*
-unsigned short int dwt_encode_stepsize(float stepsize, int numbps) 
+unsigned short int dwt_encode_stepsize(float stepsize, int numbps)
 converts a 32-bit float to a 16-bit floatingpoint type ready for QCD-marker. This is used
 to encode the quantization-stepsize.
 
@@ -32,8 +32,8 @@ int DWT(struct Tile *eingang,  int  max_Level,int line_length, int mode, int qua
 		cudaStream_t stream, int* temp_d)
 dwt-main-function. Performs the dwt on a whole tile for all its channels.
 It calls a recursive function which performs the dwt for each level.
-The dwt is implemented as a lifting implementation. The kernels are in the 
-5_3_wavelet_kernels.cu (for reversible 5-3-Le Gall-Wavelet) and 9_7_wavelet_kernels.cu 
+The dwt is implemented as a lifting implementation. The kernels are in the
+5_3_wavelet_kernels.cu (for reversible 5-3-Le Gall-Wavelet) and 9_7_wavelet_kernels.cu
 (for irreversible 9-7-Daubechies-Wavelet) files.
 
 
@@ -48,7 +48,8 @@ The dwt is implemented as a lifting implementation. The kernels are in the
 #include "waveletTransform.h"
 #include "rate-control.h"
 #include <math.h>
-#include <cutil.h>
+//#include <cutil.h>
+#include <helper_cuda.h>
 
 //#define debug
 #define temp_xdim 1024
@@ -69,7 +70,7 @@ unsigned short int dwt_encode_stepsize(float stepsize, int numbps) {
 		p--;
 		stepsize*=2;
 	}
-	
+
 	while (stepsize>=2){
 		p++;
 		stepsize/=2;
@@ -77,7 +78,7 @@ unsigned short int dwt_encode_stepsize(float stepsize, int numbps) {
 	pointer= (int*) &stepsize; //read stepsize as integer, to extract the first 11 bits of the mantissa
 
 	erg = ((*pointer)>>12)&0x7ff;
-	erg = erg|((numbps - p)<<11);
+	erg = erg|((numbps - p)<<11); //11 before
 
 	return erg;
 }
@@ -94,7 +95,7 @@ void wavelet_step_hor_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 	if (xdim%8==0 && xdim>63){
 
 		dim3 dimBlock(xdim/4);
-		dim3 dimGrid(1,ydim);	
+		dim3 dimGrid(1,ydim);
 		size_t shared_mem_size=(xdim+1)*sizeof(float);
 
 		// Launch the device computation threads
@@ -103,7 +104,7 @@ void wavelet_step_hor_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 	}else if (xdim%2==0){
 
 		dim3 dimBlock(xdim/2);
-		dim3 dimGrid(1, ydim);	
+		dim3 dimGrid(1, ydim);
 		size_t shared_mem_size=xdim*sizeof(int);
 
 		// Launch the device computation threads
@@ -120,7 +121,7 @@ void wavelet_step_hor_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 	}else{
 
 		dim3 dimBlock((xdim+1)/2);
-		dim3 dimGrid(1, ydim);	
+		dim3 dimGrid(1, ydim);
 		size_t shared_mem_size=xdim*sizeof(int);
 
 		// Launch the device computation threads
@@ -137,7 +138,7 @@ void wavelet_step_ver_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 	if (ydim%4==0&&xdim%16==0&&ydim>75&&((ydim+1)%56>4)){
 
 		dim3 dimBlock(16 ,16);
-		dim3 dimGrid(xdim/16,(ydim+55)/56);	
+		dim3 dimGrid(xdim/16,(ydim+55)/56);
 		size_t shared_mem_size=16*16*2*sizeof(int);
 
 		// Launch the device computation threads
@@ -146,7 +147,7 @@ void wavelet_step_ver_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 	} else if (xdim%16==0&&ydim>60&&((ydim+1)%56>4)){
 
 		dim3 dimBlock(16 ,16);
-		dim3 dimGrid(xdim/16,(ydim+55)/56);	
+		dim3 dimGrid(xdim/16,(ydim+55)/56);
 		size_t shared_mem_size=16*16*2*sizeof(int);
 
 		// Launch the device computation threads
@@ -155,39 +156,39 @@ void wavelet_step_ver_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 	} else if (ydim>60&&((ydim+1)%56>4)){
 
 		dim3 dimBlock(16 ,16);
-		dim3 dimGrid((xdim+15)/16,(ydim+55)/56);	
+		dim3 dimGrid((xdim+15)/16,(ydim+55)/56);
 		size_t shared_mem_size=16*16*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_5_3_Kernel_56pix_notx16_even_shared<<<dimGrid, dimBlock,shared_mem_size,  stream>>>(bild_d,temp_d,xdim,  ydim, line_length);
-		
+
 	}else if (xdim%32==0&&ydim>30&&((ydim+1)%24>4)){
 
 		dim3 dimBlock(32 ,8);
-		dim3 dimGrid(xdim/32,(ydim+23)/24);	
+		dim3 dimGrid(xdim/32,(ydim+23)/24);
 		size_t shared_mem_size=32*8*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_5_3_Kernel_56pix_x16_even_shared<<<dimGrid, dimBlock,shared_mem_size,  stream>>>(bild_d,temp_d,  ydim, line_length);
-		
+
 	}else if (ydim>30&&((ydim+1)%24>4)){
 
 		dim3 dimBlock(32 ,8);
-		dim3 dimGrid((xdim+31)/32,(ydim+23)/24);	
+		dim3 dimGrid((xdim+31)/32,(ydim+23)/24);
 		size_t shared_mem_size=32*8*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_5_3_Kernel_56pix_notx16_even_shared<<<dimGrid, dimBlock,shared_mem_size,  stream>>>(bild_d,temp_d,xdim,  ydim, line_length);
-		
+
 	}else if (ydim%2==0){
 
 		dim3 dimBlock(1,ydim/2);
-		dim3 dimGrid(xdim);	
+		dim3 dimGrid(xdim);
 		size_t shared_mem_size=ydim*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_5_3_Kernel_ver_even_shared<<<dimGrid, dimBlock,shared_mem_size, stream>>>(bild_d,temp_d,line_length );
-		
+
 	}else if (ydim==1){
 
 		dim3 dimBlock(1);
@@ -195,16 +196,16 @@ void wavelet_step_ver_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 
 		// Launch the device computation threads
 		dwt_one_pixel_ver_rev<<<dimGrid, dimBlock>>>(bild_d,temp_d);
-		
+
 	}else{
 
 		dim3 dimBlock(1,(ydim+1)/2);
-		dim3 dimGrid(xdim);	
+		dim3 dimGrid(xdim);
 		size_t shared_mem_size=ydim*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_5_3_Kernel_ver_odd_shared<<<dimGrid, dimBlock,shared_mem_size, stream>>>(bild_d,temp_d,line_length );
-		
+
 	}
 }
 
@@ -212,11 +213,11 @@ void wavelet_step_ver_rev(int* bild_d,int*temp_d,int xdim, int ydim,int line_len
 
 //function to choose the horizontal 9-7-wavelet kernel
 void wavelet_step_hor(float* bild_d,float*temp_d,int xdim, int ydim,int line_length, cudaStream_t stream ){
-	
+
 	if (xdim%8==0 && xdim>63){
 
 		dim3 dimBlock(xdim/4);
-		dim3 dimGrid(1,ydim);	
+		dim3 dimGrid(1,ydim);
 		size_t shared_mem_size=(xdim+1)*sizeof(float);
 
 		// Launch the device computation threads
@@ -225,7 +226,7 @@ void wavelet_step_hor(float* bild_d,float*temp_d,int xdim, int ydim,int line_len
 	}else if (xdim%2==0){
 
 		dim3 dimBlock(xdim/2);
-		dim3 dimGrid(1, ydim);	
+		dim3 dimGrid(1, ydim);
 		size_t shared_mem_size=xdim*sizeof(float);
 
 		// Launch the device computation threads
@@ -241,7 +242,7 @@ void wavelet_step_hor(float* bild_d,float*temp_d,int xdim, int ydim,int line_len
 	}else{
 
 		dim3 dimBlock((xdim+1)/2);
-		dim3 dimGrid(1, ydim);	
+		dim3 dimGrid(1, ydim);
 		size_t shared_mem_size=xdim*sizeof(float);
 
 		// Launch the device computation threads
@@ -255,11 +256,11 @@ void wavelet_step_hor(float* bild_d,float*temp_d,int xdim, int ydim,int line_len
 
 //function to choose the vertical 9-7-wavelet kernel
 void wavelet_step_ver(float* bild_d,float*temp_d,int xdim, int ydim,int line_length, cudaStream_t stream ){
-	
+
 	if (ydim%4==0&&xdim%16==0&&ydim>75&&((ydim+1)%56>4)){
 
 		dim3 dimBlock(16 ,16);
-		dim3 dimGrid(xdim/16,(ydim+55)/56);	
+		dim3 dimGrid(xdim/16,(ydim+55)/56);
 		size_t shared_mem_size=16*16*2*sizeof(int);
 
 		// Launch the device computation threads
@@ -268,48 +269,48 @@ void wavelet_step_ver(float* bild_d,float*temp_d,int xdim, int ydim,int line_len
 	} else if (xdim%16==0&&ydim>75&&((ydim+1)%56>4)){
 
 		dim3 dimBlock(16 ,16);
-		dim3 dimGrid(xdim/16,(ydim+55)/56);	
+		dim3 dimGrid(xdim/16,(ydim+55)/56);
 		size_t shared_mem_size=16*16*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_9_7_Kernel_56pix_x16_even_shared<<<dimGrid, dimBlock,shared_mem_size,  stream>>>(bild_d,temp_d,  ydim, line_length);
-		
+
 	} else if (ydim>75&&((ydim+1)%56>4)){
 
 		dim3 dimBlock(16 ,16);
-		dim3 dimGrid((xdim+15)/16,(ydim+55)/56);	
+		dim3 dimGrid((xdim+15)/16,(ydim+55)/56);
 		size_t shared_mem_size=16*16*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_9_7_Kernel_56pix_notx16_even_shared<<<dimGrid, dimBlock,shared_mem_size,  stream>>>(bild_d,temp_d,xdim,  ydim, line_length);
-		
+
 	}else if (ydim%4==0&&xdim%32==0&&ydim>18&&((ydim+1)%24>4)){
 
 		dim3 dimBlock(32 ,8);
-		dim3 dimGrid(xdim/32,(ydim+23)/24);	
+		dim3 dimGrid(xdim/32,(ydim+23)/24);
 		size_t shared_mem_size=32*8*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_9_7_Kernel_0mod4_x16_even_shared<<<dimGrid, dimBlock,shared_mem_size,  stream>>>(bild_d,temp_d,  ydim, line_length);
-		
+
 	}else  if (xdim%32==0&&ydim>18&&((ydim+1)%24>4)){
 
 		dim3 dimBlock(32 ,8);
-		dim3 dimGrid(xdim/32,(ydim+23)/24);	
+		dim3 dimGrid(xdim/32,(ydim+23)/24);
 		size_t shared_mem_size=32*8*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_9_7_Kernel_56pix_x16_even_shared<<<dimGrid, dimBlock,shared_mem_size, stream>>>(bild_d,temp_d, ydim, line_length);
-		
+
 	}else if (ydim>18&&((ydim+1)%24>4)){
 
 		dim3 dimBlock(32 ,8);
-		dim3 dimGrid((xdim+31)/32,(ydim+23)/24);	
+		dim3 dimGrid((xdim+31)/32,(ydim+23)/24);
 		size_t shared_mem_size=32*8*2*sizeof(int);
 
 		// Launch the device computation threads
 		dwt_9_7_Kernel_56pix_notx16_even_shared<<<dimGrid, dimBlock,shared_mem_size, stream>>>(bild_d,temp_d,xdim,  ydim, line_length);
-		
+
 	}else if (ydim%2==0){
 
 		dim3 dimBlock(1,ydim/2);
@@ -318,7 +319,7 @@ void wavelet_step_ver(float* bild_d,float*temp_d,int xdim, int ydim,int line_len
 
 		// Launch the device computation threads
 		dwt_9_7_Kernel_ver_even_shared<<<dimGrid, dimBlock, shared_mem_size, stream>>>(bild_d,temp_d,ydim,line_length );
-		
+
 	}else if (ydim==1){
 
 		dim3 dimBlock(1);
@@ -330,7 +331,7 @@ void wavelet_step_ver(float* bild_d,float*temp_d,int xdim, int ydim,int line_len
 	}else{
 
 		dim3 dimBlock(1,(ydim+1)/2);
-		dim3 dimGrid(xdim);	
+		dim3 dimGrid(xdim);
 		size_t shared_mem_size=ydim*sizeof(float);
 
 		// Launch the device computation threads
@@ -343,13 +344,13 @@ void wavelet_step_ver(float* bild_d,float*temp_d,int xdim, int ydim,int line_len
 
 void _2D_dwt(int* bild_d,int * temp_d,int** erg,int xdim, int ydim,int line_length,
 			 int mode, cudaStream_t stream){//erg 4dim array of int* to store the result subbands
-	
+
 #ifdef debug
 	 int m=ydim;
 	 int n = xdim;
 	 int i,j;
 	 int nElem=256;
- 
+
 	float* bild= (float*) malloc(sizeof(float)*16*1024);
 	printf("start, xdim: %d, ydim:%d\n ",xdim,ydim);
 	cutilSafeCall(cudaStreamSynchronize(stream));
@@ -443,9 +444,9 @@ return;
 
 
 //recursive function to perform dwt-steps
-subband* DWT_rec(int * bild_d, int * temp_d,int  m, int n,  int  level, 
+subband* DWT_rec(int * bild_d, int * temp_d,int  m, int n,  int  level,
 				 int max_Level, int line_length, int mode, int quant_enable,
-				 cudaStream_t stream){ //typically  m=height, n=width, level = number of recursions to do
+				 cudaStream_t stream, int bps){ //typically  m=height, n=width, level = number of recursions to do
 
 	subband* ergebnis;
 	float quantstepHH;
@@ -460,12 +461,14 @@ subband* DWT_rec(int * bild_d, int * temp_d,int  m, int n,  int  level,
 	ergebnis= (subband*) malloc(sizeof(subband));
 	ergebnis->Xdim=n;
 	ergebnis->Ydim=m;
+
+	//printf("DEBUG: DWT bps = %d\n", bps);
 	if (level <= max_Level){
-	
+
 		//perform 2D dwt
 		_2D_dwt(bild_d, temp_d,daten,n, m,line_length, mode,  stream);
-		
-		
+
+
 		//get quantization-stepsize
 		if (mode==LOSSY){
 			quantstepHH=get_quantstep(level,max_Level,HH,quant_enable);
@@ -477,22 +480,22 @@ subband* DWT_rec(int * bild_d, int * temp_d,int  m, int n,  int  level,
 			quantstepHL=1;
 			quantstepLH=1;
 		}
-	 
+
     	ergebnis->Typ=LLsubdiv;
 
     	//allocating the structs for the result-subbands
     	ergebnis->subbands[1]=(subband*) malloc(sizeof(subband));
     	ergebnis->subbands[2]=(subband*) malloc(sizeof(subband));
     	ergebnis->subbands[3]=(subband*) malloc(sizeof(subband));
-    	
 
-		ergebnis->subbands[1]->daten_d=daten[1];		
+
+		ergebnis->subbands[1]->daten_d=daten[1];
         ergebnis->subbands[1]->Typ=HL;
         ergebnis->subbands[1]->Xdim=n/2;
         ergebnis->subbands[1]->Ydim=(m+1)/2;
 		ergebnis->subbands[1]->fl_quantstep = quantstepHL;
-        ergebnis->subbands[1]->quantstep=dwt_encode_stepsize(quantstepHL,8);
-        ergebnis->subbands[1]->K_max = calc_K_max(ergebnis->subbands[1]->quantstep, HL, mode);
+        ergebnis->subbands[1]->quantstep=dwt_encode_stepsize(quantstepHL,bps);
+        ergebnis->subbands[1]->K_max = calc_K_max(ergebnis->subbands[1]->quantstep, HL, mode, bps);
 
 
         ergebnis->subbands[2]->daten_d=daten[2];
@@ -500,26 +503,26 @@ subband* DWT_rec(int * bild_d, int * temp_d,int  m, int n,  int  level,
         ergebnis->subbands[2]->Xdim=(n+1)/2;
         ergebnis->subbands[2]->Ydim=m/2;
 		ergebnis->subbands[2]->fl_quantstep = quantstepLH;
-        ergebnis->subbands[2]->quantstep=dwt_encode_stepsize(quantstepLH,8);
-        ergebnis->subbands[2]->K_max = calc_K_max(ergebnis->subbands[2]->quantstep, LH, mode);
+        ergebnis->subbands[2]->quantstep=dwt_encode_stepsize(quantstepLH,bps);
+        ergebnis->subbands[2]->K_max = calc_K_max(ergebnis->subbands[2]->quantstep, LH, mode, bps);
 
-       
+
         ergebnis->subbands[3]->daten_d=daten[3];
         ergebnis->subbands[3]->Typ=HH;
         ergebnis->subbands[3]->Xdim=n/2;
         ergebnis->subbands[3]->Ydim=m/2;
 		ergebnis->subbands[3]->fl_quantstep = quantstepHH;
-        ergebnis->subbands[3]->quantstep=dwt_encode_stepsize(quantstepHH,8);
-        ergebnis->subbands[3]->K_max = calc_K_max(ergebnis->subbands[3]->quantstep, HH, mode);
+        ergebnis->subbands[3]->quantstep=dwt_encode_stepsize(quantstepHH,bps);
+        ergebnis->subbands[3]->K_max = calc_K_max(ergebnis->subbands[3]->quantstep, HH, mode, bps);
 
-		
+
 
 		//recursive call for the LL-subband
-        ergebnis->subbands[0]=DWT_rec(bild_d, temp_d,(m+1)/2,(n+1)/2,level+1,max_Level,line_length, mode, quant_enable, stream);      
-        
+        ergebnis->subbands[0]=DWT_rec(bild_d, temp_d,(m+1)/2,(n+1)/2,level+1,max_Level,line_length, mode, quant_enable, stream, bps);
+
     }else{//last step of recursion
           quantstepLL=get_quantstep(level-1,max_Level,LLend,quant_enable);
-         
+
           ergebnis->daten_d=bild_d;
           ergebnis->Typ=LLend;
           ergebnis->subbands[3]=NULL;
@@ -527,18 +530,18 @@ subband* DWT_rec(int * bild_d, int * temp_d,int  m, int n,  int  level,
           ergebnis->subbands[1]=NULL;
           ergebnis->subbands[0]=NULL;
 		  ergebnis->fl_quantstep = quantstepLL;
-          ergebnis->quantstep=dwt_encode_stepsize(quantstepLL,8);
-          ergebnis->K_max = calc_K_max(ergebnis->quantstep, LLend, mode);
+          ergebnis->quantstep=dwt_encode_stepsize(quantstepLL,bps);
+          ergebnis->K_max = calc_K_max(ergebnis->quantstep, LLend, mode, bps);
 
    	}
     return ergebnis;
 }
-        
-    
-        
+
+
+
 //main DWT-function
 int DWT(struct Tile *eingang,  int  max_Level,int line_length, int mode, int quant_enable,
-		cudaStream_t stream, int* temp_d){
+		cudaStream_t stream, int bps, int* temp_d){
 	int m,n,ch;
 	subband ** subbands;
 	int * bild_d;
@@ -546,21 +549,18 @@ int DWT(struct Tile *eingang,  int  max_Level,int line_length, int mode, int qua
 	subbands= (subband**) malloc(eingang->channels * sizeof(subband*));
 	m=eingang->yDim;
 	n=eingang->xDim;
-  
-	if(mode==LOSSLESS)	
+
+	if(mode==LOSSLESS)
 		eingang->QS=0x40;
-	else	
+	else
 		eingang->QS=0x42;
 
 	//perform dwt for each channel of a tile
 	for(ch=0;ch<eingang->channels;ch++)
 	{
 		bild_d =((int**)eingang->imgData_d)[ch];
-		subbands[ch]=(subband*) DWT_rec(bild_d,temp_d,m,n,1,max_Level, line_length,mode, quant_enable, stream);
+		subbands[ch]=(subband*) DWT_rec(bild_d,temp_d,m,n,1,max_Level, line_length,mode, quant_enable, stream, bps);
 	}
 	eingang->imgData= (void **) subbands;
 	return 0;
 }
-	
-
-

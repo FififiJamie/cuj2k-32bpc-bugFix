@@ -24,8 +24,10 @@ THE SOFTWARE. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <cutil.h>
-#include <cutil_inline.h>
+//#include <cutil.h>
+//#include <cutil_inline.h>
+#include <helper_cuda.h>
+#include <helper_timer.h>
 #include "device.h"
 #include "encoder_main.h"
 
@@ -36,22 +38,22 @@ void choose_highest_capability (){
 	int major=0, minor=0, best;
 	cudaDeviceProp deviceProp;
 
-	cutilSafeCall(cudaGetDeviceCount(&deviceCount));
-    
+	checkCudaErrors(cudaGetDeviceCount(&deviceCount));
+
 	if (deviceCount == 0){
         printf("ERROR - There is no device supporting CUDA\n");
 		return;
 	}
-	
+
 	if (deviceCount == 1){
-		cutilSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+		checkCudaErrors(cudaGetDeviceProperties(&deviceProp, 0));
 		printf("***   CUJ2K running on \"%s\"   ***\n\n", deviceProp.name);
 		return;
 	}
-    
+
 	for (dev = 0; dev < deviceCount; ++dev) {
-        cutilSafeCall(cudaGetDeviceProperties(&deviceProp, dev));
-		
+        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, dev));
+
 		if (major < deviceProp.major){
 			major = deviceProp.major;
 			best = dev;
@@ -62,8 +64,8 @@ void choose_highest_capability (){
 			best = dev;
 		}
 	}
-	cutilSafeCall (cudaSetDevice(best));
-	cutilSafeCall(cudaGetDeviceProperties(&deviceProp, best));
+	checkCudaErrors (cudaSetDevice(best));
+	checkCudaErrors(cudaGetDeviceProperties(&deviceProp, best));
 	printf("***   CUJ2K running on \"%s\"   ***\n\n", deviceProp.name);
 }
 
@@ -72,29 +74,29 @@ void choose_fastest_gpu(){
 	int fastest=0, best;
 	cudaDeviceProp deviceProp;
 
-	cutilSafeCall(cudaGetDeviceCount(&deviceCount));
-    
+	checkCudaErrors(cudaGetDeviceCount(&deviceCount));
+
 	if (deviceCount == 0){
         printf("There is no device supporting CUDA\n");
 		return;
 	}
-	
+
 	if (deviceCount == 1){
-		cutilSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+		checkCudaErrors(cudaGetDeviceProperties(&deviceProp, 0));
 		printf("***   CUJ2K running on \"%s\"   ***\n\n", deviceProp.name);
 		return;
 	}
-    
+
 	for (dev = 0; dev < deviceCount; ++dev) {
-        cutilSafeCall(cudaGetDeviceProperties(&deviceProp, dev));
-		
+        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, dev));
+
 		if (fastest < deviceProp.clockRate){
 			fastest = deviceProp.clockRate;
 			best = dev;
 		}
 	}
-	cutilSafeCall (cudaSetDevice(best));
-	cutilSafeCall(cudaGetDeviceProperties(&deviceProp, best));
+	checkCudaErrors (cudaSetDevice(best));
+	checkCudaErrors(cudaGetDeviceProperties(&deviceProp, best));
 	printf("***   CUJ2K running on \"%s\"   ***\n\n", deviceProp.name);
 }
 
@@ -104,29 +106,29 @@ void choose_biggest_memory(){
 	unsigned int biggest=0;
 	cudaDeviceProp deviceProp;
 
-	cutilSafeCall(cudaGetDeviceCount(&deviceCount));
-    
+	checkCudaErrors(cudaGetDeviceCount(&deviceCount));
+
 	if (deviceCount == 0){
         printf("There is no device supporting CUDA\n");
 		return;
 	}
-	
+
 	if (deviceCount == 1){
-		cutilSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+		checkCudaErrors(cudaGetDeviceProperties(&deviceProp, 0));
 		printf("***   CUJ2K running on \"%s\"   ***\n\n", deviceProp.name);
 		return;
 	}
-    
+
 	for (dev = 0; dev < deviceCount; ++dev) {
-        cutilSafeCall(cudaGetDeviceProperties(&deviceProp, dev));
-		
+        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, dev));
+
 		if (biggest < deviceProp.totalGlobalMem){
 			biggest = deviceProp.totalGlobalMem;
 			best = dev;
 		}
 	}
-	cutilSafeCall (cudaSetDevice(best));
-	cutilSafeCall(cudaGetDeviceProperties(&deviceProp, best));
+	checkCudaErrors (cudaSetDevice(best));
+	checkCudaErrors(cudaGetDeviceProperties(&deviceProp, best));
 	printf("***   CUJ2K running on \"%s\"   ***\n\n", deviceProp.name);
 }
 
@@ -143,16 +145,16 @@ int choose_stream_gpu (int *timeout){
 	int major=0, minor=0, best;
 	cudaDeviceProp deviceProp;
 
-	cutilSafeCall(cudaGetDeviceCount(&deviceCount));
-    
+	checkCudaErrors(cudaGetDeviceCount(&deviceCount));
+
 	if (deviceCount == 0){
         printf("ERROR - There is no device supporting CUDA\n");
 		return 1;
 	}
-	
+
 	for (dev = 0; dev < deviceCount; ++dev) {
-        cutilSafeCall(cudaGetDeviceProperties(&deviceProp, dev));
-		
+        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, dev));
+
 		if (major < deviceProp.major){
 			major = deviceProp.major;
 			best = dev;
@@ -163,10 +165,10 @@ int choose_stream_gpu (int *timeout){
 			best = dev;
 		}
 	}
-	
+
 	if ((major >= 1) && (minor >= 1)){
-		cutilSafeCall (cudaSetDevice(best));	
-		cutilSafeCall(cudaGetDeviceProperties(&deviceProp, best));
+		checkCudaErrors (cudaSetDevice(best));
+		checkCudaErrors(cudaGetDeviceProperties(&deviceProp, best));
 		*timeout = deviceProp.kernelExecTimeoutEnabled;
 		//printf("timeout=%d\n", *timeout);
 
@@ -175,7 +177,7 @@ int choose_stream_gpu (int *timeout){
 		return 0;
 	}
 	else{
-		cutilSafeCall(cudaGetDeviceProperties(&deviceProp, 0));
+		checkCudaErrors(cudaGetDeviceProperties(&deviceProp, 0));
 		printf("Error: \"%s\" is NOT streaming-compatible.\nGPU with compute capability 1.1 or higher needed\n\n", deviceProp.name);
 		return 1;
 	}
@@ -186,27 +188,27 @@ int user_set_device(int device) {
 #ifdef NO_DEVICE_PROP
 	//no checking, we can't determine compute capability
 	printf("***   CUJ2K %s   ***\n\n", CUJ2K_VERSION_STR);
-	cutilSafeCall (cudaSetDevice(device));
+	checkCudaErrors (cudaSetDevice(device));
 	return 0;
 #else
 	int deviceCount;
 	cudaDeviceProp deviceProp;
 
-	cutilSafeCall(cudaGetDeviceCount(&deviceCount));
+	checkCudaErrors(cudaGetDeviceCount(&deviceCount));
 	if(device < 0  ||  device >= deviceCount) {
 		printf("Error: device number out of range.\n\n");
 		list_devices();
 		return 1;
 	}
 
-	cutilSafeCall(cudaGetDeviceProperties(&deviceProp, device));
+	checkCudaErrors(cudaGetDeviceProperties(&deviceProp, device));
 	if(deviceProp.major==1  &&  deviceProp.minor < 1) {
 		printf("Error: device \"%s\" is NOT streaming-compatible.\nGPU with compute capability 1.1 or higher needed\n\n", deviceProp.name);
 		list_devices();
 		return 1;
 	}
 
-	cutilSafeCall (cudaSetDevice(device));
+	checkCudaErrors (cudaSetDevice(device));
 	printf("***   CUJ2K %s running on \"%s\"   ***\n\n", CUJ2K_VERSION_STR,
 		deviceProp.name);
 	return 0;
@@ -218,12 +220,12 @@ void list_devices() {
 	cudaDeviceProp deviceProp;
 
 	printf("CUDA devices:\n");
-	cutilSafeCall(cudaGetDeviceCount(&deviceCount));
+	checkCudaErrors(cudaGetDeviceCount(&deviceCount));
 	if(deviceCount == 0)
 		printf("No CUDA-enabled GPU was found.\n\n");
 	else {
 		for(int i = 0; i < deviceCount; i++) {
-			cutilSafeCall(cudaGetDeviceProperties(&deviceProp, i));
+			checkCudaErrors(cudaGetDeviceProperties(&deviceProp, i));
 			printf("device #%d: \"%s\", compute capability %d.%d\n", i, deviceProp.name, deviceProp.major, deviceProp.minor);
 		}
 		printf("\nNote: compute capability >= 1.1 is required for this program.\n\n");

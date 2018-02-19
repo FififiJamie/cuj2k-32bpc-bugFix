@@ -28,8 +28,10 @@ THE SOFTWARE. */
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <cutil.h>
-#include <cutil_inline.h>
+//#include <cutil.h>
+//#include <cutil_inline.h>
+#include <helper_cuda.h>
+#include <helper_timer.h>
 #include "file_access.h"
 #include "bitmap.h"
 #include "waveletTransform.h"
@@ -49,8 +51,9 @@ THE SOFTWARE. */
 
 #define ANZ_STREAMS 3
 
-int main_stream(int argc, char **argv, int *arg_i,
-			int opt_device, int opt_bench, char *opt_bench_prefix, 
+int main_stream(const unsigned char* src, size_t insize,
+                    unsigned char** outputJ2k, size_t* outSize, int argc, char **argv, int *arg_i,
+			int opt_device, int opt_bench, char *opt_bench_prefix,
 			int opt_use_local_mem, int opt_streaming, int opt_max_cb_per_kernel,
 			char *opt_mj2)
 {
@@ -80,22 +83,22 @@ int main_stream(int argc, char **argv, int *arg_i,
 	WIN32_FIND_DATAA find_data;
 #endif
 
-	
+
 	/*for(int k=0; k < argc; k++)
 		printf("arg%d: '%s'\n", k, argv[k]);*/
 
 	locstart=(double)clock()/(double)CLOCKS_PER_SEC;
-	
+
 	const int nstreams = ANZ_STREAMS; //3-level pipeline
     // allocate and initialize an array of stream handles
     cudaStream_t *streams = (cudaStream_t*) malloc(nstreams * sizeof(cudaStream_t));
     for(int i = 0; i < nstreams; i++)
-        cutilSafeCall( cudaStreamCreate(&(streams[i])) );
+        checkCudaErrors( cudaStreamCreate(&(streams[i])) );
 
 	//compression options for each stream
 	char filein[FILENAME_LEN], fileout[nstreams][FILENAME_LEN];
 	int j2k_filesize[nstreams];
-	int pcrd[nstreams], mode[nstreams], quant_enable[nstreams], cb_dim[nstreams], 
+	int pcrd[nstreams], mode[nstreams], quant_enable[nstreams], cb_dim[nstreams],
 		fileformat[nstreams];
 
 	struct Bitmap img[nstreams];
@@ -105,11 +108,11 @@ int main_stream(int argc, char **argv, int *arg_i,
 	int progress[nstreams]={NOT_STARTED_YET,NOT_STARTED_YET,NOT_STARTED_YET};
 
 	FILE *fp;
-	
+
 	int prev=2,akt=0,next=1; //DEBUG: does this make sense?
 
 	int* wavelet_temp_d;
-	cutilSafeCall(cudaMalloc((void**)&wavelet_temp_d,1024*1024*sizeof(int)));
+	checkCudaErrors(cudaMalloc((void**)&wavelet_temp_d,1024*1024*sizeof(int)));
 
 	for(int i=0; i < nstreams; i++) {
 		bmpReset(&(img[i])); //important!
@@ -127,8 +130,9 @@ int main_stream(int argc, char **argv, int *arg_i,
 		fp_total=fopen(filename, "w");
 		fprintf(fp_total, "%s", comment);
 
-		unsigned int timer=0;
-		cutCreateTimer(&timer);
+		//unsigned int timer=0;
+		StopWatchInterface *timer = NULL;
+		sdkCreateTimer(&timer);
 
 		no_more_files = 0;
 		while(1) { //file loop
@@ -140,7 +144,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 			no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 				&in_format, out_format, &in_filename_type, &out_filename_type,
 				&opt_fileformat,
-				&opt_mode, &opt_quant_enable, 
+				&opt_mode, &opt_quant_enable,
 				&opt_pcrd, &opt_abs_size, &opt_size_factor,
 				&opt_cb_dim);
 			if(no_more_files)
@@ -154,29 +158,30 @@ int main_stream(int argc, char **argv, int *arg_i,
 			fclose(f);
 			fprintf(fp_total, "%5.3lf ", mb);
 
-			cutResetTimer(timer); cutStartTimer(timer);
+			sdkResetTimer(&timer); sdkStartTimer(&timer);
 
 			//wait until all streams have finished
 			while (progress[0]!=DONE || progress[1]!=DONE || progress[2]!=DONE) {
 
-				//dcshift,dwt (aktuell)	
+				//dcshift,dwt (aktuell)
 				if(progress[akt] == RUNNING) {
 					// *********** MCT akt *************
-					dcshift_mct(&pic[akt],mode[akt], streams[akt]);
+					//dcshift_mct(&pic[akt],mode[akt], streams[akt]);
 
 					// ********** DWT akt ***************
-					for (int i=0; i<pic[akt].tile_number;i++)
-						DWT (&pic[akt].tiles[i], 4, pic[akt].xSize, mode[akt], quant_enable[akt], streams[akt],wavelet_temp_d);
+					//for (int i=0; i<pic[akt].tile_number;i++)
+						//DWT (&pic[akt].tiles[i], 4, pic[akt].xSize, mode[akt], quant_enable[akt], streams[akt],wavelet_temp_d);
 
 					//cudaStreamSynchronize(streams[akt]);
 
 
 					// *************** Tier1 kernel akt ****************
-					tier1_pre_and_kernel(&pic[akt], &(t1pic[akt]), 64 /*threads_per_block*/,
-										 mode[akt], pcrd[akt], streams[akt], opt_max_cb_per_kernel,
-										 opt_use_local_mem, /*no timing*/0,NULL,NULL);
+					//tier1_pre_and_kernel(&pic[akt], &(t1pic[akt]), 64 /*threads_per_block*/,
+										 //mode[akt], pcrd[akt], streams[akt], opt_max_cb_per_kernel,
+										 //opt_use_local_mem, /*no timing*/0,NULL,NULL,8);
+
 				} //if(progress[akt]==RUNNING)
-			
+
 				if(progress[prev] == RUNNING) {
 					//cudaStreamSynchronize(streams[prev]);
 					// ************** Tier1 memcpy async prev *************
@@ -185,13 +190,13 @@ int main_stream(int argc, char **argv, int *arg_i,
 
 				if(bench_counter > 0) {
 					progress[next] = RUNNING;
-					int status = any_img_read(&(img[next]), filein);
+					int status = any_img_read(src, insize, &(img[next]), filein);
 					if(status != 0)
 						exit(1);
 					strcpy(fileout[next], "output.j2k");
 					file_counter++;
 
-					printf("%s (%dx%d) -> %s\n", filein, img[next].xDim, img[next].yDim, fileout[next]);
+					//printf("%s (%dx%d) -> %s\n", filein, img[next].xDim, img[next].yDim, fileout[next]);
 
 					mode[next] = opt_mode;
 					pcrd[next] = opt_pcrd;
@@ -201,7 +206,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 					if(opt_pcrd==SIZE_ABS)
 						j2k_filesize[next] = opt_abs_size;
 					else if(opt_pcrd==SIZE_REL)
-						j2k_filesize[next] = (int)(opt_size_factor * (float)(img[next].channels * 
+						j2k_filesize[next] = (int)(opt_size_factor * (float)(img[next].channels *
 							img[next].xDim * img[next].yDim));
 					bench_counter--;
 				}
@@ -209,26 +214,26 @@ int main_stream(int argc, char **argv, int *arg_i,
 					progress[next] = DONE;
 
 				if(progress[next] == RUNNING) {
-					// ***************** tiling(nächstes) (without data transfer)
+					// ***************** tiling(nï¿½chstes) (without data transfer)
 					//pic[next] = .......
 					tiling (&pic[next], &img[next], cb_dim[next]);
 
 					// *************** transfering data to device (originally in tiling)(memcpyasync host_to_device)
 					size = img[next].xDim * img[next].yDim*sizeof(int);
 
-					cutilSafeCall (cudaMemcpyAsync((void*)pic[next].tiles->imgData_d[0],(void*)img[next].imgData[0],3*size,cudaMemcpyHostToDevice,streams[next]));
+					checkCudaErrors (cudaMemcpyAsync((void*)pic[next].tiles->imgData_d[0],(void*)img[next].imgData[0],3*size,cudaMemcpyHostToDevice,streams[next]));
 				}
 
 				if(progress[prev] == RUNNING) {
 					// must wait, copy_cbs_to_pic needs host data ready
-					cutilSafeCall(cudaStreamSynchronize(streams[prev])); 
+					checkCudaErrors(cudaStreamSynchronize(streams[prev]));
 
 					copy_cbs_to_pic(&pic[prev], t1pic[prev].cbs_h, t1pic[prev].mq_buf_size);
 
 					InitializeBuffer(&buffer);
-					encodeCodeStream(&buffer, &pic[prev], &(t1pic[prev]), 4, mode[prev], quant_enable[prev]);
+					//encodeCodeStream(&buffer, &pic[prev], &(t1pic[prev]), 4, mode[prev], quant_enable[prev]);
 					fp = fopen(fileout[prev], "wb");
-					write_output_file(fp, &pic[prev], &buffer, fileformat[prev]);
+					//write_output_file(fp, &pic[prev], &buffer, fileformat[prev], 8);
 					/*write_fileformat(fp, &pic[prev]);
 					write_codestream_box(fp, &buffer);*/
 					fclose(fp);
@@ -237,11 +242,11 @@ int main_stream(int argc, char **argv, int *arg_i,
 					free(buffer.Data);
 					total_files_compressed++;
 				}
-			
+
 				if(progress[akt] == RUNNING) {
 					//nachtier1 (akt)
 					tier1_post(&pic[akt], &(t1pic[akt]), j2k_filesize[akt], pcrd[akt], streams[akt]);
-					//cutilSafeCall(cudaFree(pic[akt].tiles[0].imgData_d[0]));
+					//checkCudaErrors(cudaFree(pic[akt].tiles[0].imgData_d[0]));
 				}
 
 				akt=(akt+1)%3;
@@ -250,13 +255,13 @@ int main_stream(int argc, char **argv, int *arg_i,
 			}//pipelineschleifen-ende
 			///////////////////////////////////////////////////////////////
 
-			cutStopTimer(timer);
-			timetotal = cutGetTimerValue(timer) / 1000.0;
+			sdkStopTimer(&timer);
+			timetotal = sdkGetTimerValue(&timer) / 1000.0;
 
 			fprintf(fp_total, "%5.6lf\n", timetotal / (double)BENCH_RUNS);
 		} //file loop
 
-		cutDeleteTimer(timer);
+		sdkDeleteTimer(&timer);
 
 		fclose(fp_total);
 	}
@@ -267,7 +272,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 		no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 			&in_format, out_format, &in_filename_type, &out_filename_type,
 			&opt_fileformat,
-			&opt_mode, &opt_quant_enable, 
+			&opt_mode, &opt_quant_enable,
 			&opt_pcrd, &opt_abs_size, &opt_size_factor,
 			&opt_cb_dim);
 
@@ -277,24 +282,24 @@ int main_stream(int argc, char **argv, int *arg_i,
 		//wait until all streams have finished
 		while (progress[0]!=DONE || progress[1]!=DONE || progress[2]!=DONE) {
 
-			//dcshift,dwt (aktuell)	
+			//dcshift,dwt (aktuell)
 			if(progress[akt] == RUNNING) {
 				// *********** MCT akt *************
-				dcshift_mct(&pic[akt],mode[akt], streams[akt]);
+				//dcshift_mct(&pic[akt],mode[akt], streams[akt]);
 
 				// ********** DWT akt ***************
-				for (int i=0; i<pic[akt].tile_number;i++)
-					DWT (&pic[akt].tiles[i], 4, pic[akt].xSize, mode[akt], quant_enable[akt], streams[akt],wavelet_temp_d);
+				//for (int i=0; i<pic[akt].tile_number;i++)
+					//DWT (&pic[akt].tiles[i], 4, pic[akt].xSize, mode[akt], quant_enable[akt], streams[akt],wavelet_temp_d);
 
 				//cudaStreamSynchronize(streams[akt]);
 
 
 				// *************** Tier1 kernel akt ****************
-				tier1_pre_and_kernel(&pic[akt], &(t1pic[akt]), 64 /*threads_per_block*/,
-									 mode[akt], pcrd[akt], streams[akt], opt_max_cb_per_kernel,
-									 opt_use_local_mem, /*no timing*/0,NULL,NULL);
+				//tier1_pre_and_kernel(&pic[akt], &(t1pic[akt]), 64 /*threads_per_block*/,
+				//					 mode[akt], pcrd[akt], streams[akt], opt_max_cb_per_kernel,
+				//					 opt_use_local_mem, /*no timing*/0,NULL,NULL);
 			} //if(progress[akt]==RUNNING)
-		
+
 			if(progress[prev] == RUNNING) {
 				//cudaStreamSynchronize(streams[prev]);
 				// ************** Tier1 memcpy async prev *************
@@ -338,7 +343,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 				}
 
 				if(status==0)
-					status = any_img_read(&(img[next]), filein);
+					status = any_img_read(src, insize, &(img[next]), filein);
 
 				if(status==0) {
 					progress[next] = RUNNING;
@@ -351,7 +356,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 						replace_ext(fileout[next], filein, JPEG2000_EXT[opt_fileformat]);
 					file_counter++;
 
-					printf("%s (%dx%d) -> %s\n", filein, img[next].xDim, img[next].yDim, fileout[next]);
+					//printf("%s (%dx%d) -> %s\n", filein, img[next].xDim, img[next].yDim, fileout[next]);
 
 					mode[next] = opt_mode;
 					pcrd[next] = opt_pcrd;
@@ -361,7 +366,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 					if(opt_pcrd==SIZE_ABS)
 						j2k_filesize[next] = opt_abs_size;
 					else if(opt_pcrd==SIZE_REL)
-						j2k_filesize[next] = (int)(opt_size_factor * (float)(img[next].channels * 
+						j2k_filesize[next] = (int)(opt_size_factor * (float)(img[next].channels *
 							img[next].xDim * img[next].yDim));
 
 					if(in_filename_type == SINGLE_FILE) {
@@ -369,7 +374,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 						no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 							&in_format, out_format, &in_filename_type, &out_filename_type,
 							&opt_fileformat,
-							&opt_mode, &opt_quant_enable, 
+							&opt_mode, &opt_quant_enable,
 							&opt_pcrd, &opt_abs_size, &opt_size_factor,
 							&opt_cb_dim);
 					}
@@ -381,7 +386,7 @@ int main_stream(int argc, char **argv, int *arg_i,
 					no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 						&in_format, out_format, &in_filename_type, &out_filename_type,
 						&opt_fileformat,
-						&opt_mode, &opt_quant_enable, 
+						&opt_mode, &opt_quant_enable,
 						&opt_pcrd, &opt_abs_size, &opt_size_factor,
 						&opt_cb_dim);
 				}
@@ -389,26 +394,29 @@ int main_stream(int argc, char **argv, int *arg_i,
 
 
 			if(progress[next] == RUNNING) {
-				// ***************** tiling(nächstes) (without data transfer)
+				// ***************** tiling(nï¿½chstes) (without data transfer)
 				//pic[next] = .......
 				tiling (&pic[next], &img[next], cb_dim[next]);
 
 				// *************** transfering data to device (originally in tiling)(memcpyasync host_to_device)
 				size = img[next].xDim * img[next].yDim*sizeof(int);
 
-				cutilSafeCall (cudaMemcpyAsync((void*)pic[next].tiles->imgData_d[0],(void*)img[next].imgData[0],3*size,cudaMemcpyHostToDevice,streams[next]));
+				checkCudaErrors (cudaMemcpyAsync((void*)pic[next].tiles->imgData_d[0],(void*)img[next].imgData[0],3*size,cudaMemcpyHostToDevice,streams[next]));
 			}
 
 			if(progress[prev] == RUNNING) {
 				// must wait, copy_cbs_to_pic needs host data ready
-				cutilSafeCall(cudaStreamSynchronize(streams[prev])); 
+				checkCudaErrors(cudaStreamSynchronize(streams[prev]));
 
 				copy_cbs_to_pic(&pic[prev], t1pic[prev].cbs_h, t1pic[prev].mq_buf_size);
 
 				InitializeBuffer(&buffer);
-				encodeCodeStream(&buffer, &pic[prev], &(t1pic[prev]), 4, mode[prev], quant_enable[prev]);
-				fp = fopen(fileout[prev], "wb");
-				write_output_file(fp, &pic[prev], &buffer, fileformat[prev]);
+				//encodeCodeStream(&buffer, &pic[prev], &(t1pic[prev]), 4, mode[prev], quant_enable[prev]);
+				//fp = fopen(fileout[prev], "wb");
+				fp = fmemopen((void *)*outputJ2k, buffer.ByteCounter + 85, "wb");
+				*outSize = buffer.ByteCounter + 85;
+
+				//write_output_file(fp, &pic[prev], &buffer, fileformat[prev], 8);
 				/*write_fileformat(fp, &pic[prev]);
 				write_codestream_box(fp, &buffer);*/
 				fclose(fp);
@@ -417,11 +425,11 @@ int main_stream(int argc, char **argv, int *arg_i,
 				free(buffer.Data);
 				total_files_compressed++;
 			}
-		
+
 			if(progress[akt] == RUNNING) {
 				//nachtier1 (akt)
 				tier1_post(&pic[akt], &(t1pic[akt]), j2k_filesize[akt], pcrd[akt], streams[akt]);
-				//cutilSafeCall(cudaFree(pic[akt].tiles[0].imgData_d[0]));
+				//checkCudaErrors(cudaFree(pic[akt].tiles[0].imgData_d[0]));
 			}
 
 			akt=(akt+1)%3;
@@ -430,20 +438,20 @@ int main_stream(int argc, char **argv, int *arg_i,
 		}//pipelineschleifen-ende
 		///////////////////////////////////////////////////////////////
 	}
-	//tempspeicher für Wavlet freen
-	cutilSafeCall(cudaFree(wavelet_temp_d));
+	//tempspeicher fï¿½r Wavlet freen
+	checkCudaErrors(cudaFree(wavelet_temp_d));
     // destroy streams
     for(int i = 0; i < nstreams; i++)
-        cutilSafeCall( cudaStreamDestroy(streams[i]) );
+        checkCudaErrors( cudaStreamDestroy(streams[i]) );
 
 	for(int i=0; i < nstreams; i++) {
 		bmpFree(&(img[i]));
 		free_picture (&pic[i]);
 		tier1_free(&(t1pic[i]));
 	}
-	
+
 	locend=(double)clock()/(double)CLOCKS_PER_SEC;
-	printf("\n\n%d file(s) compressed, total Time:   %lf\n", total_files_compressed, locend-locstart);
+	printf("\n\n%d image(s) compressed, total Time:   %lf\n", total_files_compressed, locend-locstart);
 
 	mj2_wrapper(opt_mj2);
 

@@ -30,7 +30,7 @@ THE SOFTWARE. */
 
 /* writes a byte to given file*/
 int write_byte(FILE *fp, unsigned char value){
-	
+
 	if(fputc(value, fp) == EOF){
 		printf("Error while writing file!");
 		return(-1);
@@ -74,14 +74,14 @@ int write_JP2header(FILE *fp, int variousBpc, int nc){
 		write_int(fp, 8 + IHB_LENGTH + CSB_LENGTH + BPC_LENGTH + nc);
 	else
 		write_int(fp, 8+ IHB_LENGTH + CSB_LENGTH);
-	
-	
+
+
 	write_int(fp, JP2_HEADER_BOX);
 	return 0;
 }
 /* write image header box.*/
 
-int write_imageheader(FILE *fp, struct Picture *pic){
+int write_imageheader(FILE *fp, struct Picture *pic, int bps){
 	// L field
 	write_int(fp, IHB_LENGTH);
 	// T field
@@ -91,8 +91,9 @@ int write_imageheader(FILE *fp, struct Picture *pic){
 	write_int(fp, pic->xSize);
 	// number of components
 	write_short(fp, 0x0003);
+	//write_int(fp, BITS_PER_COMPONENT_BOX);
 	// bit depth (only 24 bit yet)
-	write_byte(fp, 0x07);
+	write_byte(fp, (unsigned char)(bps-1));
 	// compression type, JPEG2000 allows only the value 7
 	write_byte(fp, 0x07);
 	// UC = unknown colorspace
@@ -114,7 +115,7 @@ int write_colorbox(FILE *fp, int nc){
 	write_byte(fp, 0x00);
 	// sRGB color space
 	write_int(fp, 16);
-	
+
 	return 0;
 }
 
@@ -130,14 +131,15 @@ int write_codestream_box(FILE *fp, struct Buffer *codestream, int format){
 	return 0;
 }
 
-int write_fileformat (FILE *fp, struct Picture *pic){
-	
+int write_fileformat (FILE *fp, struct Picture *pic, int bps){
+
 	/* writing the fixed length 12 bytes JPEG2000 signature-box */
 	write_int(fp, 0x0000000C);
 	write_int(fp, JP2_SIGNATURE_BOX);
 	// brand
 	write_int(fp, 0x0d0a870a);
-	// writing file type box. 
+
+	// writing file type box.
 	write_int(fp, 0x00000014);
 	write_int(fp, JP2_FILETYPE_BOX);
 
@@ -147,7 +149,7 @@ int write_fileformat (FILE *fp, struct Picture *pic){
 	// header box
 	write_JP2header(fp, 0, 0);
 	// image header box
-	write_imageheader(fp, pic);
+	write_imageheader(fp, pic, bps);
 	// color box
 	write_colorbox(fp, 0);
 
@@ -155,11 +157,11 @@ int write_fileformat (FILE *fp, struct Picture *pic){
 }
 
 
-int write_output_file(FILE *fp, struct Picture *pic, struct Buffer *codestream, 
-					  int format)
+int write_output_file(FILE *fp, struct Picture *pic, struct Buffer *codestream,
+					  int format, int bps)
 {
 	if(format==FORMAT_JP2)
-		write_fileformat(fp, pic);
+		write_fileformat(fp, pic, bps);
 	write_codestream_box(fp, codestream, format);
 
 	return 0;

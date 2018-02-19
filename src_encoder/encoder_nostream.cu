@@ -27,9 +27,11 @@ THE SOFTWARE. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include <cutil.h>
-#include <cutil_inline.h>
+//#include <time.h>
+//#include <cutil.h>
+//#include <cutil_inline.h>
+#include <helper_cuda.h>
+#include <helper_timer.h>
 #include "file_access.h"
 #include "bitmap.h"
 #include "waveletTransform.h"
@@ -51,8 +53,9 @@ THE SOFTWARE. */
 
 
 
-int main_nostream(int argc, char **argv, int *arg_i,
-			int opt_device, int opt_bench, char *opt_bench_prefix, 
+int main_nostream(const unsigned char* src, size_t insize,
+                    unsigned char** outputJ2k, size_t* outSize, int argc, char **argv, int *arg_i,
+			int opt_device, int opt_bench, char *opt_bench_prefix,
 			int opt_use_local_mem, int opt_streaming, int opt_max_cb_per_kernel,
 			char *opt_mj2)
 {
@@ -72,7 +75,7 @@ int main_nostream(int argc, char **argv, int *arg_i,
 	FILE *fp_total, *fp_pre, *fp_dwt, *fp_t1, *fp_pcrd, *fp_t2, *fp_to_gpu, *fp_from_gpu;
 
 	double locstart, locend, timetotal, timepre, timedwt, timetier1, timepcrd, timetier2, timetogpu, timefromgpu;
-	double filetotal, filepre, filedwt, filetier1, filepcrd, filetier2, filetogpu, filefromgpu, 
+	double filetotal, filepre, filedwt, filetier1, filepcrd, filetier2, filetogpu, filefromgpu,
 		file_t1_togpu, file_t1_fromgpu;
 
 	int size;
@@ -82,7 +85,7 @@ int main_nostream(int argc, char **argv, int *arg_i,
 	HANDLE h_find;
 	WIN32_FIND_DATAA find_data;
 #endif
-	
+
 	/*for(int k=0; k < argc; k++)
 		printf("arg%d: '%s'\n", k, argv[k]);*/
 
@@ -97,26 +100,30 @@ int main_nostream(int argc, char **argv, int *arg_i,
 
 	int progress=NOT_STARTED_YET;
 
-	struct Bitmap img;
+	//struct Bitmap img;
+  struct simpleTIFF img;
 	struct Picture pic;
 	struct Tier1_Pic t1pic;
 	struct Buffer buffer;
-	
+
 	//JPEG2000 filesize = BMP filesize * size_factor (when PCRD enabled)
 	FILE *fp;
-	
-	int* wavelet_temp_d;
-	cutilSafeCall(cudaMalloc((void**)&wavelet_temp_d,1024*1024*sizeof(int)));
 
-	bmpReset(&img);
+	int* wavelet_temp_d;
+	checkCudaErrors(cudaMalloc((void**)&wavelet_temp_d,1024*1024*sizeof(int)));
+
+	//bmpReset(&img);
 	picReset(&pic);
 	tier1_pic_reset(&t1pic);
 
 	out_filename_type = NOT_SPECIFIED;
 	mj2_set_options(opt_mj2, &opt_fileformat, out_format, &out_filename_type);
 
+
+
 	if(opt_bench) {
-		unsigned int timer_part=0, timer_total=0, timer_memcpy=0;
+		//unsigned int timer_part=0, timer_total=0, timer_memcpy=0;
+		StopWatchInterface *timer_part=NULL, *timer_total=NULL, *timer_memcpy=NULL;
 		char filename[200];
 		char comment[] = "# Filesize[MB]   execution time average per file[s]\n";
 
@@ -137,7 +144,7 @@ int main_nostream(int argc, char **argv, int *arg_i,
 		fprintf(fp_t1, "%s", comment);
 
 		sprintf(filename, "%s_pcrd.txt", opt_bench_prefix);
-		fp_pcrd=fopen(filename, "w");		
+		fp_pcrd=fopen(filename, "w");
 		fprintf(fp_pcrd, "%s", comment);
 
 		sprintf(filename, "%s_tier2.txt", opt_bench_prefix);
@@ -153,16 +160,16 @@ int main_nostream(int argc, char **argv, int *arg_i,
 		fprintf(fp_from_gpu, "%s", comment);
 
 
-		cutCreateTimer(&timer_part);
-		cutCreateTimer(&timer_total);
-		cutCreateTimer(&timer_memcpy);
+		sdkCreateTimer(&timer_part);
+		sdkCreateTimer(&timer_total);
+		sdkCreateTimer(&timer_memcpy);
 
 		while(1) {
 			first_to_find=1;
 			no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 				&in_format, out_format, &in_filename_type, &out_filename_type,
 				&opt_fileformat,
-				&opt_mode, &opt_quant_enable, 
+				&opt_mode, &opt_quant_enable,
 				&opt_pcrd, &opt_abs_size, &opt_size_factor,
 				&opt_cb_dim);
 			if(no_more_files)
@@ -188,16 +195,16 @@ int main_nostream(int argc, char **argv, int *arg_i,
 
 			while(bench_counter > 0) {
 
-				cutResetTimer(timer_total); cutStartTimer(timer_total);
+				sdkResetTimer(&timer_total); sdkStartTimer(&timer_total);
 
-				int status = any_img_read(&(img), filein);
-				if(status != 0) 
-					return 1; //exit(1);
+				//int status = any_img_read(src, insize, &(img), filein);
+				//if(status != 0)
+				//	return 1; //exit(1);
 
 				strcpy(fileout, "output.j2k");
 				file_counter++;
 
-				printf("%s (%dx%d) -> %s\n", filein, img.xDim, img.yDim, fileout);
+				//printf("%s (%dx%d) -> %s\n", filein, img.xDim, img.yDim, fileout);
 
 				mode = opt_mode;
 				pcrd = opt_pcrd;
@@ -207,106 +214,108 @@ int main_nostream(int argc, char **argv, int *arg_i,
 				if(opt_pcrd==SIZE_ABS)
 					j2k_filesize = opt_abs_size;
 				else if(opt_pcrd==SIZE_REL)
-					j2k_filesize = (int)(opt_size_factor * (float)(img.channels * 
+					j2k_filesize = (int)(opt_size_factor * (float)(img.channels *
 						img.xDim * img.yDim));
 
-				cutResetTimer(timer_part); cutStartTimer(timer_part);
+				sdkResetTimer(&timer_part); sdkStartTimer(&timer_part);
 
 				// ***************** tiling(next) (without data transfer)
-				tiling (&pic, &img, cb_dim);
+				//tiling (&pic, &img, cb_dim);
 
-				cutStopTimer(timer_part);
-				filepre = cutGetTimerValue(timer_part);
+				sdkStopTimer(&timer_part);
+				filepre = sdkGetTimerValue(&timer_part);
 
 				// ******** transfering data to device (originally in tiling)(memcpyasync host_to_device)
 				size = img.xDim * img.yDim*sizeof(int);
 
-				cutResetTimer(timer_part); cutStartTimer(timer_part);
+				sdkResetTimer(&timer_part); sdkStartTimer(&timer_part);
 
-				cutilSafeCall (cudaMemcpyAsync((void*)pic.tiles->imgData_d[0],(void*)img.imgData[0],3*size,cudaMemcpyHostToDevice,NO_STREAM));
+				checkCudaErrors (cudaMemcpyAsync((void*)pic.tiles->imgData_d[0],(void*)img.imgData[0],3*size,cudaMemcpyHostToDevice,NO_STREAM));
 
-				cutStopTimer(timer_part);
-				filetogpu = cutGetTimerValue(timer_part);
+				sdkStopTimer(&timer_part);
+				filetogpu = sdkGetTimerValue(&timer_part);
 
-				cutResetTimer(timer_part); cutStartTimer(timer_part);
+				sdkResetTimer(&timer_part); sdkStartTimer(&timer_part);
 
-				//dcshift,dwt (aktuell)	
+				//dcshift,dwt (aktuell)
 				// *********** MCT akt *************
-				dcshift_mct(&pic,mode, NO_STREAM);
-				cutilSafeCall(cudaThreadSynchronize());
+				//dcshift_mct(&pic,mode, NO_STREAM);
+				checkCudaErrors(cudaThreadSynchronize());
 
-				cutStopTimer(timer_part);
-				filepre += cutGetTimerValue(timer_part);
-
-
-				cutResetTimer(timer_part);
-				cutStartTimer(timer_part);
+				sdkStopTimer(&timer_part);
+				filepre += sdkGetTimerValue(&timer_part);
 
 
+				sdkResetTimer(&timer_part);
+				sdkStartTimer(&timer_part);
+
+				printf("pic.tile_number = %d\n",pic.tile_number );
 				// ********** DWT akt ***************
 				for (int i=0; i<pic.tile_number;i++)
-					DWT (&pic.tiles[i], 4, pic.xSize, mode, quant_enable, NO_STREAM,wavelet_temp_d);
-				cutilSafeCall(cudaThreadSynchronize());
+					//DWT (&pic.tiles[i], 4, pic.xSize, mode, quant_enable, NO_STREAM,wavelet_temp_d);
+				checkCudaErrors(cudaThreadSynchronize());
 
-				cutStopTimer(timer_part);
-				filedwt = cutGetTimerValue(timer_part);
+				sdkStopTimer(&timer_part);
+				filedwt = sdkGetTimerValue(&timer_part);
 
-				cutResetTimer(timer_part); cutStartTimer(timer_part);
+				sdkResetTimer(&timer_part); sdkStartTimer(&timer_part);
 
 				// *************** Tier1 kernel akt ****************
-				tier1_pre_and_kernel(&pic, &(t1pic), 64 /*threads_per_block*/,
-									 mode, pcrd, NO_STREAM, opt_max_cb_per_kernel,
-									 opt_use_local_mem, timer_memcpy, &file_t1_togpu, &file_t1_fromgpu);
-				cutilSafeCall(cudaThreadSynchronize());
+				//tier1_pre_and_kernel(&pic, &(t1pic), 64 /*threads_per_block*/,
+				//					 mode, pcrd, NO_STREAM, opt_max_cb_per_kernel,
+				//					 opt_use_local_mem,timer_memcpy, &file_t1_togpu, &file_t1_fromgpu);
+				checkCudaErrors(cudaThreadSynchronize());
 
-				cutStopTimer(timer_part);
+				sdkStopTimer(&timer_part);
 				//measure time, but subtract memcpy times
-				filetier1 = cutGetTimerValue(timer_part) - file_t1_togpu - file_t1_fromgpu;
+				filetier1 = sdkGetTimerValue(&timer_part) - file_t1_togpu - file_t1_fromgpu;
 
-				cutResetTimer(timer_part); cutStartTimer(timer_part);
+				sdkResetTimer(&timer_part); sdkStartTimer(&timer_part);
 
 				//filepcrd=(double)clock()/(double)CLOCKS_PER_SEC;
 				//nachtier1 (akt)
 				tier1_post(&pic, &(t1pic), j2k_filesize, pcrd, NO_STREAM);
-				cutilSafeCall(cudaThreadSynchronize());
+				checkCudaErrors(cudaThreadSynchronize());
 
-				cutStopTimer(timer_part);
-				filepcrd = cutGetTimerValue(timer_part);
-				//cutilSafeCall(cudaFree(pic.tiles[0].imgData_d[0]));
+				sdkStopTimer(&timer_part);
+				filepcrd = sdkGetTimerValue(&timer_part);
+				//checkCudaErrors(cudaFree(pic.tiles[0].imgData_d[0]));
 				//filepcrd=(double)clock()/(double)CLOCKS_PER_SEC - filepcrd;
 
-				cutResetTimer(timer_part); cutStartTimer(timer_part);
+				sdkResetTimer(&timer_part); sdkStartTimer(&timer_part);
 
 				// ************** Tier1 memcpy async prev *************
 				tier1_memcpy_async (&(t1pic), NO_STREAM, opt_use_local_mem);
 
 				// must wait, copy_cbs_to_pic needs host data ready
-				//cutilSafeCall(cudaStreamSynchronize(NO_STREAM)); 
-				cutilSafeCall(cudaThreadSynchronize()); 
+				//checkCudaErrors(cudaStreamSynchronize(NO_STREAM));
+				checkCudaErrors(cudaThreadSynchronize());
 
-				cutStopTimer(timer_part);
-				filefromgpu = cutGetTimerValue(timer_part);
+				sdkStopTimer(&timer_part);
+				filefromgpu = sdkGetTimerValue(&timer_part);
 
-				cutResetTimer(timer_part); cutStartTimer(timer_part);
+				sdkResetTimer(&timer_part); sdkStartTimer(&timer_part);
 
 				copy_cbs_to_pic(&pic, t1pic.cbs_h, t1pic.mq_buf_size);
 
 				InitializeBuffer(&buffer);
-				encodeCodeStream(&buffer, &pic, &(t1pic), 4, mode, quant_enable);
-				fp = fopen(fileout, "wb");
+				//encodeCodeStream(&buffer, &pic, &(t1pic), 4, mode, quant_enable);
+				//fp = fopen(fileout, "wb");
+                fp = fmemopen((void *)*outputJ2k, buffer.ByteCounter + 85, "wb");
+    			*outSize = buffer.ByteCounter + 85;
 				/*write_fileformat(fp, &pic);
 				write_codestream_box(fp, &buffer);*/
-				write_output_file(fp, &pic, &buffer, fileformat);
+				write_output_file(fp, &pic, &buffer, fileformat, 8);
 				fclose(fp);
 				//printf("FILESIZE: %d\n", buffer.ByteCounter+85);
 
 				free(buffer.Data);
 				//filetier2=(double)clock()/(double)CLOCKS_PER_SEC - filetier2;
 				//filetotal=(double)clock()/(double)CLOCKS_PER_SEC - filetotal;
-				cutStopTimer(timer_part);
-				filetier2 = cutGetTimerValue(timer_part);
-				cutStopTimer(timer_total);
-				filetotal = cutGetTimerValue(timer_total);
+				sdkStopTimer(&timer_part);
+				filetier2 = sdkGetTimerValue(&timer_part);
+				sdkStopTimer(&timer_total);
+				filetotal = sdkGetTimerValue(&timer_total);
 
 				filetogpu += file_t1_togpu;
 				filefromgpu += file_t1_fromgpu;
@@ -344,10 +353,11 @@ int main_nostream(int argc, char **argv, int *arg_i,
 		fclose(fp_to_gpu);
 		fclose(fp_from_gpu);
 
-		cutDeleteTimer(timer_part);
-		cutDeleteTimer(timer_total);
-		cutDeleteTimer(timer_memcpy);
+		sdkDeleteTimer(&timer_part);
+		sdkDeleteTimer(&timer_total);
+		sdkDeleteTimer(&timer_memcpy);
 	}
+
 	else { //NO BENCHMARK
 
 		first_to_find=1;
@@ -355,13 +365,15 @@ int main_nostream(int argc, char **argv, int *arg_i,
 		no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 			&in_format, out_format, &in_filename_type, &out_filename_type,
 			&opt_fileformat,
-			&opt_mode, &opt_quant_enable, 
+			&opt_mode, &opt_quant_enable,
 			&opt_pcrd, &opt_abs_size, &opt_size_factor,
 			&opt_cb_dim);
-
+			//printf("TETS no more file = %d\n", no_more_files);
 		while (1) {
 			progress = DONE;
 			while(!no_more_files) {
+				//printf("TETS no more file in= %d\n", no_more_files);
+
 				int status=0;
 				if(in_filename_type == FORMAT_STR)
 					sprintf(filein, in_format, file_counter);
@@ -396,10 +408,12 @@ int main_nostream(int argc, char **argv, int *arg_i,
 					strcpy(filein, in_format);
 				}
 
-				if(status==0)
-					status = any_img_read(&(img), filein);
+				if(status==0) //chaneg here for tiff
+          status = tiffRead(src, insize, &(img), filein);
+					//status = any_img_read(src, insize, &(img), filein);   ////  Nyriad: file input!!!!!!!!!!!!
 
 				if(status==0) {
+					//printf("in status TETS no more file in= %d\n", no_more_files);
 					progress = RUNNING;
 
 					if(out_filename_type == SINGLE_FILE)
@@ -412,7 +426,7 @@ int main_nostream(int argc, char **argv, int *arg_i,
 					}
 					file_counter++;
 
-					printf("%s (%dx%d) -> %s\n", filein, img.xDim, img.yDim, fileout);
+					//printf("%s (%dx%d) -> %s\n", filein, img.xDim, img.yDim, fileout);
 
 					mode = opt_mode;
 					pcrd = opt_pcrd;
@@ -422,7 +436,7 @@ int main_nostream(int argc, char **argv, int *arg_i,
 					if(opt_pcrd==SIZE_ABS)
 						j2k_filesize = opt_abs_size;
 					else if(opt_pcrd==SIZE_REL)
-						j2k_filesize = (int)(opt_size_factor * (float)(img.channels * 
+						j2k_filesize = (int)(opt_size_factor * (float)(img.channels *
 							img.xDim * img.yDim));
 
 					if(in_filename_type == SINGLE_FILE) {
@@ -430,10 +444,12 @@ int main_nostream(int argc, char **argv, int *arg_i,
 						no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 							&in_format, out_format, &in_filename_type, &out_filename_type,
 							&opt_fileformat,
-							&opt_mode, &opt_quant_enable, 
+							&opt_mode, &opt_quant_enable,
 							&opt_pcrd, &opt_abs_size, &opt_size_factor,
 							&opt_cb_dim);
+							//printf("in status 2 TETS no more file in= %d\n", no_more_files);
 					}
+					//printf("1\n");
 					break;
 				}
 				else {
@@ -441,62 +457,80 @@ int main_nostream(int argc, char **argv, int *arg_i,
 					no_more_files = fetch_next_filename(argc, argv, arg_i, &file_counter,
 						&in_format, out_format, &in_filename_type, &out_filename_type,
 						&opt_fileformat,
-						&opt_mode, &opt_quant_enable, 
+						&opt_mode, &opt_quant_enable,
 						&opt_pcrd, &opt_abs_size, &opt_size_factor,
 						&opt_cb_dim);
 				}
+
 			}
+			//printf("--------2\n");
 
 			if(progress==DONE)
 				break;
-
-			// ***************** tiling(nächstes) (without data transfer)
+				//printf("3\n");
+			// ***************** tiling(nï¿½chstes) (without data transfer)
 			//pic = .......
-			tiling (&pic, &img, cb_dim);
+      printf("image.bps = %d\n", img.bps);
+			tiling2 (&pic, &img, cb_dim);
 
 			// *************** transfering data to device (originally in tiling)(memcpyasync host_to_device)
 			size = img.xDim * img.yDim*sizeof(int);
+      //copy int
+			checkCudaErrors (cudaMemcpyAsync((void*)pic.tiles->imgData_d[0],(void*)img.imgData[0],3*size,cudaMemcpyHostToDevice,NO_STREAM));
 
-			cutilSafeCall (cudaMemcpyAsync((void*)pic.tiles->imgData_d[0],(void*)img.imgData[0],3*size,cudaMemcpyHostToDevice,NO_STREAM));
 
-
-		//dcshift,dwt (aktuell)	
+		  //dcshift,dwt (aktuell)
 			// *********** MCT akt *************
-			dcshift_mct(&pic,mode, NO_STREAM);
-
+			dcshift_mct(&pic,mode, img.bps, NO_STREAM);
 			// ********** DWT akt ***************
 			for (int i=0; i<pic.tile_number;i++)
-				DWT (&pic.tiles[i], 4, pic.xSize, mode, quant_enable, NO_STREAM,wavelet_temp_d);
+				DWT (&pic.tiles[i], 4, pic.xSize, mode, quant_enable, NO_STREAM, img.bps, wavelet_temp_d);
 
-			//cudaStreamSynchronize(streams);
-
+			//cudaStreamSynchronize(NO_STREAM);
+			//cudaDeviceSynchronize();
+			//getLastCudaError("~~~~~~~~~~~~~~~~~~~~~~~~~");
+			//char * foo = NULL;
+			//printf("!!!!!!!!!!sizeof foo = %d\n", sizeof(foo));
 
 			// *************** Tier1 kernel akt ****************
 			tier1_pre_and_kernel(&pic, &(t1pic), 64 /*threads_per_block*/,
 								 mode, pcrd, NO_STREAM, opt_max_cb_per_kernel,
-								 opt_use_local_mem, /*no timing*/0,NULL,NULL);
+								 opt_use_local_mem, /*no timing*/0,NULL,NULL, img.bps);
 
 
 
 			//nachtier1 (akt)
 			tier1_post(&pic, &(t1pic), j2k_filesize, pcrd, NO_STREAM);
-			//cutilSafeCall(cudaFree(pic.tiles[0].imgData_d[0]));
+			//checkCudaErrors(cudaFree(pic.tiles[0].imgData_d[0]));
 
 			//cudaStreamSynchronize(streams[prev]);
 			// ************** Tier1 memcpy async prev *************
-			tier1_memcpy_async (&(t1pic), NO_STREAM, opt_use_local_mem);
+
+			//printf("cudaGetLastError ; %s\n",cudaGetErrorString(cudaGetLastError()));
+			tier1_memcpy_async(&(t1pic), NO_STREAM, opt_use_local_mem);
+			//printf("cudaGetLastError 2; %s\n",cudaGetErrorString(cudaGetLastError()));
 
 			// must wait, copy_cbs_to_pic needs host data ready
-			cutilSafeCall(cudaStreamSynchronize(NO_STREAM)); 
+			//printf("cudaErrorInvalidResourceHandle = %d , %lu\n", cudaErrorInvalidResourceHandle),
+			//cudaStreamSynchronize(NO_STREAM);
+			//checkCudaErrors(cudaStreamSynchronize(NO_STREAM));
+			//checkCudaErrors(cudaDeviceSynchronize());
+			cudaDeviceSynchronize();
+			//getLastCudaError("~~~~~");
 
 			copy_cbs_to_pic(&pic, t1pic.cbs_h, t1pic.mq_buf_size);
 
 			InitializeBuffer(&buffer);
-			encodeCodeStream(&buffer, &pic, &(t1pic), 4, mode, quant_enable);
-			fp = fopen(fileout, "wb");
+			encodeCodeStream(&buffer, &pic, &(t1pic), 4, mode, quant_enable, img.bps);
+			//fp = fopen(fileout, "wb");                     //Nyriad: file output!!!!!!!!!!!!!!!!!!
+			printf("DEBUG:~~~\n");
+			fp = fmemopen((void *)*outputJ2k, buffer.ByteCounter + 85, "wb");
+			*outSize = buffer.ByteCounter + 85;
+      printf("DEBUG:~~~\n");
+			//printf("DEBUG:~~~codestream.ByteCounter %d\n", buffer.ByteCounter);
 			/*write_fileformat(fp, &pic);
 			write_codestream_box(fp, &buffer);*/
-			write_output_file(fp, &pic, &buffer, fileformat);
+			write_output_file(fp, &pic, &buffer, fileformat, img.bps);
 
 			fclose(fp);
 			//printf("FILESIZE: %d\n", buffer.ByteCounter+85);
@@ -507,16 +541,16 @@ int main_nostream(int argc, char **argv, int *arg_i,
 	}
 
 
-	//tempspeicher für Wavlet freen
-	cutilSafeCall(cudaFree(wavelet_temp_d));
+	//tempspeicher fï¿½r Wavlet freen
+	checkCudaErrors(cudaFree(wavelet_temp_d));
 
-	bmpFree(&(img));
+	tiffFree(&(img));
 	free_picture (&pic);
 	tier1_free(&(t1pic));
 
-	
+
 	locend=(double)clock()/(double)CLOCKS_PER_SEC;
-	printf("\n\n%d file(s) compressed, total Time:   %lf\n", total_files_compressed, locend-locstart);
+	printf("\n\n%d image(s) compressed, total Time:   %lf\n", total_files_compressed, locend-locstart);
 
 	mj2_wrapper(opt_mj2);
 

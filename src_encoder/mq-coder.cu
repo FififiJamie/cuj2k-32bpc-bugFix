@@ -47,7 +47,7 @@ typedef long long int64;
    LPS probability in context cx is = Qe[I[cx]] / (0.708 * 2^16) */
 __constant__
     unsigned short Qe[]={0x5601, 0x3401, 0x1801, 0x0ac1, 0x0521, 0x0221, 0x5601,
-              0x5401, 0x4801, 0x3801, 0x3001, 0x2401, 0x1c01, 0x1601, 
+              0x5401, 0x4801, 0x3801, 0x3001, 0x2401, 0x1c01, 0x1601,
               0x5601, 0x5401, 0x5101, 0x4801, 0x3801, 0x3401, 0x3001,
               0x2801, 0x2401, 0x2201, 0x1c01, 0x1801, 0x1601, 0x1401,
               0x1201, 0x1101, 0x0ac1, 0x09c1, 0x08a1, 0x0521, 0x0441,
@@ -107,7 +107,7 @@ __device__ void MQ_Reset(unsigned char *MPS, unsigned char *I) {
 	int i;
 	for(i = 0; i < N_CONTEXTS; i++)
 		MPS[i] = I[i] = 0;
-	
+
 	/* set some special values (different in wiley<->marcellin!)*/
 	I[0] = 4; /*Ksig*/
 	//I[17] = 3; /*Krun <- wiley*/
@@ -117,12 +117,21 @@ __device__ void MQ_Reset(unsigned char *MPS, unsigned char *I) {
 
 
 /* reset A,C,t,T */
-__device__ void MQenc_Restart(int id) {
+__device__ inline void MQenc_Restart(int id) {
 	//uint4 *enc_start = (uint4*)(s_data + id * ALIGNED_MQENC_SIZE);
 	(enc_A) = 0x8000;
 	(enc_C) = 0;
-	(enc_t) = 12;
+	(enc_t) = 12; //12 before
 	(enc_T) = 0;
+
+
+    //char *enc_start_temp = s_data + id*ALIGNED_MQENC_SIZE;
+    //uint4 * enc_start_temp_2 = (uint4*)enc_start_temp;
+    //enc_start_temp_2->x = 0x8000;
+    //enc_start_temp_2->y = 0;
+    //enc_start_temp_2->w = 12;
+    //enc_start_temp_2->z = 0;
+
 }
 
 
@@ -133,8 +142,15 @@ __device__ void MQenc_Init(int id) {
 	//char *enc_MPS = s_data + id*ALIGNED_MQENC_SIZE + sizeof(uint4);
 	//char *enc_I   = enc_MPS + N_CONTEXTS;
 
+    char *MPS_temp = s_data + id*ALIGNED_MQENC_SIZE + sizeof(uint4);
+    char *enc_I_temp = MPS_temp + N_CONTEXTS;
+
+    MQ_Reset((unsigned char*)MPS_temp, (unsigned char*)enc_I_temp);
+
+    //printf("~~~~~s_data = %d\n", s_data[1] - s_data[0]);
+
 	/* skip 1st byte */
-	MQ_Reset(enc_MPS, enc_I);
+	//MQ_Reset(enc_MPS, enc_I);
 	MQenc_Restart(id);
 }
 
@@ -172,9 +188,9 @@ __device__ void transferByte(int id, unsigned char *B, int *L) {
 	else {
 		(enc_T) += C_carry; /* propagate carry from C to T */
 		(enc_C) &= 0x7FFFFFF; /* clear C_carry = keep bits 0..26 */
-		
+
 		putByte(id, B, L);
-		
+
 		if((enc_T) == 0xFF) {
 			(enc_T) = C_msbs;
 			(enc_C) &= 0xFFFFF; /* clear C_msbs = keep bits 0..19 */
@@ -184,8 +200,8 @@ __device__ void transferByte(int id, unsigned char *B, int *L) {
 			(enc_T) = C_partial;
 			(enc_C) &= 0x807FFFF; /*clear C_partial = keep bits 0..18 + 27*/
 			(enc_t) = 8; /* transfer full byte */
-		}		
-	}	
+		}
+	}
 }
 
 
@@ -250,19 +266,19 @@ __device__ void MQenc_Encode(int id, unsigned char *B, int *L, int cx, int d) {
 __device__ void MQenc_Encode(struct MQ_Enc_Info *enc, struct Codeblock *cb, int cx, int d) {
 	unsigned s = enc->MPS[cx];
 	unsigned p = Qe [enc->I [cx]];
-	
+
 	/*assert((d == 0) || (d == 1));
 	assert((cx >= 0) && (cx < N_CONTEXTS));*/
 
 	enc->A -= p;
 	if(enc->A < p)
 		s = 1 - s; /* conditional exchange MPS/LPS; only local effect (intended?)*/
-		
+
 	if(d == s)
 		enc->C += p; /* assign MPS the upper sub-interval*/
 	else
 		enc->A = p; /* assign LPS the lower sub-interval */
-		
+
 	if(enc->A < (1<<15) ) {
 		if(d == enc->MPS[cx]) /*symbol was real MPS (use old value)*/
 			enc->I[cx]  =  NMPS[ enc->I[cx] ];
@@ -273,14 +289,14 @@ __device__ void MQenc_Encode(struct MQ_Enc_Info *enc, struct Codeblock *cb, int 
 			enc->I[cx] = NLPS[ enc->I[cx] ];
 		}
 	}
-	
+
 	while(enc->A < (1<<15) ) { /*perform renormalization shift*/
 		(enc->A) <<= 1; /*double values*/
 		(enc->C) <<= 1;
 		(enc->t)--;
 		if(enc->t == 0)
 			transferByte(enc, cb);
-	}	
+	}
 }
 #endif
 
@@ -296,7 +312,7 @@ __device__ void MQenc_Terminate(int id, unsigned char *B, int *L) {
 	//TODO: direct shift!
 	(enc_C) <<= (enc_t); /* C = 2^t * C */
 	//(enc_C) *= 1 << (enc_t); /* C = 2^t * C */
-	
+
 	while(nBits > 0) {
 		transferByte(id,B,L);
 		nBits -= (enc_t); /*new value of t is the number of bits just transferred*/
@@ -306,7 +322,7 @@ __device__ void MQenc_Terminate(int id, unsigned char *B, int *L) {
 		(enc_C) <<= (enc_t); /* C = 2^t * C */
 		//(enc_C) *= 1 << (enc_t); /* C = 2^t * C */
 	}
-	
+
 	transferByte(id,B,L);
 }
 
@@ -322,7 +338,7 @@ __device__ void MQenc_Easy_Truncation(unsigned char *B, int *L) {
 	if((*L) >= 1  &&  B[(*L) - 1] == 0xFF)
 		(*L)--;
 	/* trunc FF 7F at the end as often as possible */
-	while((*L) >= 2  &&  B[(*L) - 2] == 0xFF && 
+	while((*L) >= 2  &&  B[(*L) - 2] == 0xFF &&
 	                     B[(*L) - 1] == 0x7F)
 	{
 		(*L) -= 2;
@@ -354,7 +370,7 @@ __device__ void MQenc_CalcTruncation(uint4 *saved,
 		//avoid too small index
 		/*if(trunc_len_array[pass] < 0)
 			trunc_len_array[pass] = 0;*/
-		
+
 		pre_trunc_len = trunc_len_array[pass];
 
 		Cr = ((int64)sav_T << (int64)27) + ((int64)sav_C << (int64)sav_t);
@@ -366,9 +382,9 @@ __device__ void MQenc_CalcTruncation(uint4 *saved,
 		SF_pow2 = ((int64)1)<<SF; /* value is used often => pre-calculate it */
 
 		/* 1st phase: make truncation point "longer" if necessary */
-		      /*length-check necessary for some special cases */ 
+		      /*length-check necessary for some special cases */
 		while(pre_trunc_len + F < (*L)  && //don't exceed data length
-			  F < 5  &&  ((RF + SF_pow2 - 1 < Cr) || (RF + SF_pow2 - 1 >= Cr + Ar))) 
+			  F < 5  &&  ((RF + SF_pow2 - 1 < Cr) || (RF + SF_pow2 - 1 >= Cr + Ar)))
 		{
 			F++;
 			if(F <= 4) { /* maximum for F is 5, anyway */
@@ -389,12 +405,12 @@ __device__ void MQenc_CalcTruncation(uint4 *saved,
 			}
 		}
 		/* now F==Fmin (as mentioned in the book) */
-		
+
 		trunc_len = pre_trunc_len + (int)F;
 		shortened = 0;
-		
+
 		dbgTier1b("pass %d: %d+%d = %d bytes. ", pass, pre_trunc_len, (int)F, trunc_len);
-		
+
 		/* 2nd phase: make truncation point "shorter" if possible */
 		/* this happens very rarely, but when deliberately introducing 0xFFs,
 		   the truncation works. */
@@ -404,7 +420,7 @@ __device__ void MQenc_CalcTruncation(uint4 *saved,
 			shortened = 1;
 		}
 		/* trunc FF 7F at the end as often as possible */
-		while(trunc_len >= 2 && buf[trunc_len-2]==0xFF && 
+		while(trunc_len >= 2 && buf[trunc_len-2]==0xFF &&
 		                        buf[trunc_len-1]==0x7F)
 		{
 			trunc_len -= 2;
@@ -414,7 +430,7 @@ __device__ void MQenc_CalcTruncation(uint4 *saved,
 		//because L starts with 0 instead of -1
 		trunc_len_array[pass] = max(trunc_len-1, 0);
 		//assert(trunc_len_array[pass] <= L);
-			
+
 		if(shortened)
 			dbgTier1b("further trunc to %d bytes.\n", trunc_len);
 		else
