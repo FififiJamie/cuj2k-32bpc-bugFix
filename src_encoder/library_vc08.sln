@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual C++ Express 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "library_vc08", "library_vc08.vcproj", "{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		EmuDebug|Win32 = EmuDebug|Win32
+		EmuRelease|Win32 = EmuRelease|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.Debug|Win32.Build.0 = Debug|Win32
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.EmuDebug|Win32.ActiveCfg = EmuDebug|Win32
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.EmuDebug|Win32.Build.0 = EmuDebug|Win32
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.EmuRelease|Win32.ActiveCfg = EmuRelease|Win32
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.EmuRelease|Win32.Build.0 = EmuRelease|Win32
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.Release|Win32.ActiveCfg = Release|Win32
+		{0D6B5B12-7BCA-46CC-B6B7-9FF83C20BF19}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
